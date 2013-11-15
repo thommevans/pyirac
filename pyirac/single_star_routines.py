@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import scipy.optimize
 import scipy.interpolate
 import scipy.spatial
-from pyraf import iraf
+from pyraf import iraf # MAKE THIS OPTIONAL
 iraf.digiphot()
 iraf.apphot()
 
@@ -23,8 +23,7 @@ steps of the pipeline reduction:
 
 Routines that actually contain the implementation
 of the various centroiding algorithms:
-  fluxweight1d_centroid()
-  fluxweight2d_centroid()
+  fluxweight_centroid()
   gauss1d_centroid()
   gauss2d_centroid()
   iraf_centroid()
@@ -177,12 +176,9 @@ def centroids( irac ):
     maxshift = 2
     if boxwidth%2==0:
         boxwidth += 1
-    if method=='fluxweight2d':
-        irac.xy_fluxweight2d = np.zeros( [ irac.nframes, 2 ] )
-        irac.xy_method = 'fluxweight2d'
-    elif method=='fluxweight1d':
-        irac.xy_fluxweight1d = np.zeros( [ irac.nframes, 2 ] )
-        irac.xy_method = 'fluxweight1d'
+    if method=='fluxweight':
+        irac.xy_fluxweight = np.zeros( [ irac.nframes, 2 ] )
+        irac.xy_method = 'fluxweight'
     elif method=='gauss1d':
         irac.xy_gauss1d = np.zeros( [ irac.nframes, 2 ] )
         irac.xy_method = 'gauss1d'
@@ -278,7 +274,7 @@ def centroids( irac ):
 
             # Identify the box surrounding the starting guess xy-coordinates:
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
-            xrefined, yrefined = fluxweight2d_centroid( subarray, xsub, ysub )
+            xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
 
             if ( k==0 ):
@@ -304,14 +300,10 @@ def centroids( irac ):
                 else:
                     peak_prev = peak_curr
 
-            if method=='fluxweight1d':
-                x0, y0 = fluxweight1d_centroid( subarray, xsub, ysub )
-                irac.xy_fluxweight1d[k,0] = x0
-                irac.xy_fluxweight1d[k,1] = y0
-            elif method=='fluxweight2d':
-                x0, y0 = fluxweight2d_centroid( subarray, xsub, ysub )
-                irac.xy_fluxweight2d[k,0] = x0
-                irac.xy_fluxweight2d[k,1] = y0
+            if method=='fluxweight':
+                x0, y0 = fluxweight_centroid( subarray, xsub, ysub )
+                irac.xy_fluxweight[k,0] = x0
+                irac.xy_fluxweight[k,1] = y0
             elif method=='gauss1d':
                 x0, y0, wx, wy = gauss1d_centroid( subarray, xsub, ysub, irac.channel )
                 irac.xy_gauss1d[k,0] = x0
@@ -321,7 +313,7 @@ def centroids( irac ):
                 irac.xy_gauss2d[k,0] = x0
                 irac.xy_gauss2d[k,1] = y0
             elif method=='iraf':
-                xguess, yguess = fluxweight1d_centroid( subarray, xsub, ysub )
+                xguess, yguess = fluxweight_centroid( subarray, xsub, ysub )
                 xyguess = np.array( [ xguess, yguess ] )
                 x0, y0 = iraf_centroid( irac.adir, fitsfile, xyguess, j, boxwidth )
                 irac.xy_iraf[k,0] = x0
@@ -347,12 +339,9 @@ def centroids( irac ):
         print '\n'
 
     # Stand-alone text files containing the centroids:
-    if method=='fluxweight1d':
-        ofilename = os.path.join( irac.adir, 'xy_fluxweight1d.coords' )
-        np.savetxt( ofilename, irac.xy_fluxweight1d )
-    elif method=='fluxweight2d':
-        ofilename = os.path.join( irac.adir, 'xy_fluxweight2d.coords' )
-        np.savetxt( ofilename, irac.xy_fluxweight2d )
+    if method=='fluxweight':
+        ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords' )
+        np.savetxt( ofilename, irac.xy_fluxweight )
     elif method=='gauss1d':
         ofilename = os.path.join( irac.adir, 'xy_gauss1d.coords' )
         np.savetxt( ofilename, irac.xy_gauss1d )
@@ -365,14 +354,18 @@ def centroids( irac ):
     if np.sum( irac.goodbad )<nstart:
         print 'Flagged {0:d} of {1:d} frames as bad due to large pointing shifts or other problems'\
               .format( int( nstart-np.sum( irac.goodbad ) ), irac.nframes )
-    #print 'Saved xy coords in {0}'.format( ofilename )
-    #print 'Done.'
+
+    if irac.verbose>0:
+        print 'Saved xy coords in {0}'.format( ofilename )
+        print 'Done.'
     
     return None
 
     
-def fluxweight1d_centroid( subarray, xsub, ysub ):
+def fluxweight_centroid( subarray, xsub, ysub ):
     """
+    Used to also have fluxweight2d, but realised that
+    is mathematically identical and nearly 50% slower.
     """
     
     marginal_x = np.sum( subarray, axis=0 )
@@ -381,18 +374,6 @@ def fluxweight1d_centroid( subarray, xsub, ysub ):
     x0 = np.sum( xsub*marginal_x )/fluxsumx
     fluxsumy = np.sum( marginal_y )
     y0 = np.sum( ysub*marginal_y )/fluxsumy
-
-    return x0, y0
-
-
-def fluxweight2d_centroid( subarray, xsub, ysub ):
-    """
-    """
-    
-    xmesh, ymesh = np.meshgrid( xsub, ysub )
-    fluxsum = np.sum( subarray )
-    x0 = np.sum( xmesh * subarray )/fluxsum
-    y0 = np.sum( ymesh * subarray )/fluxsum
 
     return x0, y0
 
@@ -646,12 +627,14 @@ def preclean( irac, iters=2 ):
     # by the centroids() routine:
     print '\nUsing centroids determined by {0} method...'\
           .format( irac.xy_method )
-    if irac.xy_method=='fluxweight2d':
-        xy = irac.xy_fluxweight2d
-    if irac.xy_method=='fluxweight1d':
-        xy = irac.xy_fluxweight1d
+    if irac.xy_method=='fluxweight':
+        xy = irac.xy_fluxweight
+    elif irac.xy_method=='gauss1d':
+        xy = irac.xy_gauss1d
     elif irac.xy_method=='gauss2d':
         xy = irac.xy_gauss2d
+    elif irac.xy_method=='iraf':
+        xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method attribute not recognised' )
 
@@ -940,12 +923,14 @@ def bg_subtract( irac ):
     print '\nRunning bg_subtract()...'
     print '\nUsing centroids determined by {0} method...'\
           .format( irac.xy_method )
-    if irac.xy_method=='fluxweight2d':
-        xy = irac.xy_fluxweight2d
-    elif irac.xy_method=='fluxweight1d':
-        xy = irac.xy_fluxweight1d
+    if irac.xy_method=='fluxweight':
+        xy = irac.xy_fluxweight
+    elif irac.xy_method=='gauss1d':
+        xy = irac.xy_gauss1d
     elif irac.xy_method=='gauss2d':
         xy = irac.xy_gauss2d
+    elif irac.xy_method=='iraf':
+        xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method either None or not recognised' )
     if xy==None:
@@ -959,22 +944,38 @@ def bg_subtract( irac ):
         nsigma_clip = 4
     irac.bg_ppix = -1*np.ones( irac.nframes )
     MJysr2electrons = irac.exptime*irac.gain/irac.fluxconv
+
+    if irac.verbose>0:
+        if irac.bg_kwargs['method']=='annulus_circle':
+            print 'Calculating the background flux in annulus centered on star'
+            print 'for each frame...'
+        elif irac.bg_kwargs['method']=='corners':
+            print 'Calculating the sky flux in {0}x{0} pixel corners of each image'\
+                  .format( irac.bg_kwargs['ncorner'], irac.bg_kwargs['ncorner'] )
+            print 'for each frame...'
+        elif irac.bg_kwargs['method']=='custom_mask':
+            print 'Calculating the sky flux from pixels in custom-defined mask for each image'
+            print 'for each frame...'
+
     for i in range( irac.nfits ):
+
+        # Read in the contents of the ith FITS file:
+        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        fits_data_i = hdu[0].read_image()
+        hdu.close()
+
         for j in range( irac.nsub[i] ):
 
-            # Work out the current image number:
-            k = np.sum( irac.nsub[:i] ) + j
-            if irac.goodbad[k]==0:
-                continue
-
-            # Read in the kth image:
-            hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            fits_data_i = hdu[0].read_image()
-            hdu.close()
+            # Extract the current frame:
             if irac.nsub[i]==1:
                 fullarray = fits_data_i
             else:
                 fullarray = fits_data_i[j,:,:]
+                
+            # Determine the current image number:
+            k = np.sum( irac.nsub[:i] ) + j
+            if irac.goodbad[k]==0:
+                continue
 
             if i==0:
                 naxis1 = np.shape( fullarray )[1]
@@ -988,33 +989,37 @@ def bg_subtract( irac ):
                 print '... up to frame {0} of {1} (in {2})'\
                       .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) )
             xycentroid = xy[k,:]
-            if bg_kwargs['method']=='annulus_circle':
-                print 'Calculating the background flux in annulus centered on star'
-                print 'for each frame...'
+            if irac.bg_kwargs['method']=='annulus_circle':
                 annulus_inedge = irac.bg_kwargs['annulus_inedge']
                 annulus_width = irac.bg_kwargs['annulus_width']
                 bg_pixs = get_annulus_circle_pixs( fullarray, xmesh, ymesh, xycentroid, \
                                                    irac.ap_radius, \
                                                    irac.bg_kwargs['annulus_inedge'], \
                                                    irac.bg_kwargs['annulus_width'] )
-            elif bg_kwargs['method']=='corners':
-                print 'Calculating the sky flux in {0}x{0} pixel corners of each image'\
-                      .format( irac.bg_kwargs['ncorner'], irac.bg_kwargs['ncorner'] )
-                print 'for each frame...'
+            elif irac.bg_kwargs['method']=='corners':
                 bg_pixs = get_corner_pixs( fullarray, xmesh, ymesh, xycentroid, \
                                            irac.ap_radius, \
                                            irac.bg_kwargs['ncorner'] )
-            elif bg_kwargs['method']=='custom_mask':
-                print 'Calculating the sky flux from pixels in custom-defined mask for each image'
-                print 'for each frame...'
+            elif irac.bg_kwargs['method']=='custom_mask':
                 bg_pixs = get_corner_pixs( fullarray, xmesh, ymesh, xycentroid, \
                                            irac.ap_radius, \
                                            irac.bg_kwargs['custom_mask'] )
+
+            # Two-pass sigma clipping:
+            bg_med = np.median( bg_pixs )
+            bg_stdv = np.std( bg_pixs )
+            delta_sigmas = ( bg_pixs - bg_med )/bg_stdv
+            ixs_keep_1 = ( delta_sigmas < nsigma_clip )
+            bg_med = np.median( bg_pixs[ixs_keep_1] )
+            bg_stdv = np.std( bg_pixs[ixs_keep_1] )
+            delta_sigmas = ( bg_pixs[ixs_keep_1] - bg_med )/bg_stdv
+            ixs_keep_2 = ( delta_sigmas < nsigma_clip )
+            bg_pixs = bg_pixs[ixs_keep_1][ixs_keep_2]
                 
             if irac.bg_kwargs['value']=='median':
-                irac.bg_ppix[k] = np.median( bg_pixs[ixs_keep] )*MJysr2electrons
+                irac.bg_ppix[k] = np.median( bg_pixs )*MJysr2electrons
             elif irac.bg_kwargs['value']=='mean':
-                irac.bg_ppix[k] = np.mean( bg_pixs[ixs_keep] )*MJysr2electrons
+                irac.bg_ppix[k] = np.mean( bg_pixs )*MJysr2electrons
             else:
                 pdb.set_trace() # none implemented yet
                 
@@ -1091,7 +1096,7 @@ def get_corner_pixs( fullarray, xmesh, ymesh, xymid, ap_radius, ncorner ):
     xcorners = xmesh[ixs].flatten()
     ycorners = ymesh[ixs].flatten()
     xycorners = np.column_stack( [ xcorners, ycorners ] )
-    
+
     # Only keep the pixels that are outsiude the
     # photometric aperture:
     xymid = np.reshape( np.array( [ xymid[0], xymid[1] ] ), [ 1, 2 ] )
@@ -1099,7 +1104,7 @@ def get_corner_pixs( fullarray, xmesh, ymesh, xymid, ap_radius, ncorner ):
     ixs = ( pixdists.flatten()>ap_radius+1 )
     bg_pixs = bg_pixs[ixs]
 
-    return None
+    return bg_pixs
 
 
 def get_custom_mask_pixs( fullarray, xmesh, ymesh, xymid, ap_radius, custom_mask ):
@@ -1131,12 +1136,14 @@ def ap_phot( irac, save_pngs=False ):
     
     print '\nUsing centroids determined by {0} method...'\
           .format( irac.xy_method )
-    if irac.xy_method=='fluxweight2d':
-        xy = irac.xy_fluxweight2d
-    elif irac.xy_method=='fluxweight1d':
-        xy = irac.xy_fluxweight1d
+    if irac.xy_method=='fluxweight':
+        xy = irac.xy_fluxweight
+    elif irac.xy_method=='gauss1d':
+        xy = irac.xy_gauss1d
     elif irac.xy_method=='gauss2d':
         xy = irac.xy_gauss2d
+    elif irac.xy_method=='iraf':
+        xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method either None or not recognised' )
     if xy==None:
@@ -1162,29 +1169,33 @@ def ap_phot( irac, save_pngs=False ):
 
     
     for i in range( irac.nfits ):
+
+        # Read in the contents of the ith FITS file:
+        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        fits_data_i = hdu[0].read_image()
+        hdu.close()
+
         for j in range( irac.nsub[i] ):
 
-            # Work out the current image number:
+            # Determine the current image number:
             k = np.sum( irac.nsub[:i] ) + j
+            if k%500==0:
+                print '... up to frame {0} of {1} (in {2})'\
+                      .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) )
             if irac.goodbad[k]==0:
                 continue
+
+            # Extract the current frame:
+            if irac.nsub[i]==1:
+                fullarray = fits_data_i
+            else:
+                fullarray = fits_data_i[j,:,:]
 
             # Center of aperture:
             xcent = xy[k,0]
             ycent = xy[k,1]
 
             # Cut subarray from full frame:
-            hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            fits_data_i = hdu[0].read_image()
-            hdu.close()
-            if irac.nsub[i]==1:
-                fullarray = fits_data_i
-            else:
-                fullarray = fits_data_i[j,:,:]
-            if k%500==0:
-                print '... up to frame {0} of {1} (in {2})'\
-                      .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) )
-
             subarray, xsub, ysub = cut_subarray( fullarray, xcent, ycent, photom_boxwidth )
             # Bilinear interpolation of subarray:
             interpf = scipy.interpolate.RectBivariateSpline( xsub, ysub, subarray.T, kx=1, ky=1, s=0 )
@@ -1327,12 +1338,12 @@ def save_table( irac, ofilename=None ):
     if centroid_method=='gauss2d':
         otable.add_column( 'xcent', irac.xy_gauss2d[:,0], unit='pixel' )
         otable.add_column( 'ycent', irac.xy_gauss2d[:,1], unit='pixel' )
-    elif centroid_method=='fluxweight2d':
-        otable.add_column( 'xcent', irac.xy_fluxweight2d[:,0], unit='pixel' )
-        otable.add_column( 'ycent', irac.xy_fluxweight2d[:,1], unit='pixel' )
-    elif centroid_method=='fluxweight1d':
-        otable.add_column( 'xcent', irac.xy_fluxweight1d[:,0], unit='pixel' )
-        otable.add_column( 'ycent', irac.xy_fluxweight1d[:,1], unit='pixel' )
+    elif centroid_method=='fluxweight':
+        otable.add_column( 'xcent', irac.xy_fluxweight[:,0], unit='pixel' )
+        otable.add_column( 'ycent', irac.xy_fluxweight[:,1], unit='pixel' )
+    elif centroid_method=='gauss1d':
+        otable.add_column( 'xcent', irac.xy_gauss1d[:,0], unit='pixel' )
+        otable.add_column( 'ycent', irac.xy_gauss1d[:,1], unit='pixel' )
     for key in irac.centroid_kwargs.keys():
         if key!='method':
             otable.add_keyword( key, irac.centroid_kwargs[key] )
