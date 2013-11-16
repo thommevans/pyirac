@@ -142,13 +142,16 @@ def centroids( irac ):
     irac.nfits = len( irac.fitsfiles )
     irac.nsub = np.zeros( irac.nfits, dtype=int )
     for i in range( irac.nfits ):
+        if irac.verbose>0:
+            print 'Reading in fits file {0} of {1}...'\
+                  .format( i+1, irac.nfits )
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-        d = hdu[0].read_image()
+        dims = hdu[0].info['dims']
         hdu.close()
-        if np.rank( d )==2:
+        if len( dims )==2:
             irac.nsub[i] = 1
-        elif np.rank( d )==3:
-            irac.nsub[i] = np.shape( d )[0]
+        elif len( dims )==3:
+            irac.nsub[i] = dims[0]
         else:
             pdb.set_trace() #shouldn't happen
     irac.nframes = np.sum( irac.nsub )
@@ -192,8 +195,9 @@ def centroids( irac ):
     # Guess xy-coordinates for first frame:
     xguess = irac.init_xy[0]
     yguess = irac.init_xy[1]
-    #print '\nUsing {0} to calculate centroids within {1}x{1} pixel box'\
-    #      .format( method, boxwidth )
+    if irac.verbose>0:
+        print '\nCalculating centroids within a {0}x{0} pixel box'\
+              .format( boxwidth )
 
     # Apply centroiding algorithm one image at a time:
     suspicious_ks = []
@@ -217,6 +221,10 @@ def centroids( irac ):
             else:
                 fullarray = data[j,:,:]
                 k = np.sum( irac.nsub[:i] ) + j
+
+            if irac.verbose>0:
+                print 'Centroiding frame {0} of {1} using {2}...'\
+                      .format( k+1, irac.nframes, method )
 
             # Check if current frame has already been
             # flagged as bad:
@@ -1287,6 +1295,7 @@ def cut_subarray( fullarray, xcent, ycent, boxwidth ):
     ysub = ypixs[yixs] + 0.5
 
     return subarray, xsub, ysub
+
 
 def save_table( irac, ofilename=None ):
     """
