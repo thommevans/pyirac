@@ -551,6 +551,9 @@ def gauss2d_centroid_WITH_ROTATION(  subarray, xsub, ysub, channel ):
 
 def iraf_centroid( adir, fitsfile, xymid, jth_sub, boxwidth ):
     """
+    Uses IRAF implementation of the fluxweight method for
+    determining the centroid coordinates. This is done by
+    setting the calgorithm parameter to 'centroid'.
     """
 
     # Turn interaction off:
@@ -559,7 +562,9 @@ def iraf_centroid( adir, fitsfile, xymid, jth_sub, boxwidth ):
 
     # Prepare algorithm settings:
     iraf.centerpars.cbox = boxwidth
-    iraf.centerpars.calgorithm = 'gauss'    
+    #iraf.centerpars.calgorithm = 'gauss' # fits 1D gaussians to marginal profiles;
+                                          # requires FWHMs of gaussians to be specified
+    iraf.centerpars.calgorithm = 'centroid' # weighted means of marginals
 
     # Save the initial guess coordinates in an
     # external file, as required by IRAF:
