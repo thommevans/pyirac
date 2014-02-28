@@ -908,8 +908,6 @@ def preclean( irac, iters=2 ):
                     else:
                         print '--> discarding frame {0} in {1}'\
                               .format( j+1, os.path.basename( irac.fitsfiles[i] ) )
-                        print fcurrent.max(), fmedians.max(), nsigmas.max()#DELETE
-                        print ''#DELETE
                     irac.goodbad[k] = 0
                     
     nremoved_f = nstart - np.sum( irac.goodbad )
