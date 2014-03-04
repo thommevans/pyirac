@@ -60,7 +60,7 @@ def read_headers( irac ):
     for i in range( nfits ):
 
         fitsfile = os.path.join( irac.ddir, irac.fitsfiles[i] )
-        if irac.verbose>0:
+        if irac.verbose>1:
             print fitsfile
         hdu = fitsio.FITS( fitsfile, 'r' )
         header = hdu[0].read_header()
@@ -142,7 +142,7 @@ def centroids( irac ):
     irac.nfits = len( irac.fitsfiles )
     irac.nsub = np.zeros( irac.nfits, dtype=int )
     for i in range( irac.nfits ):
-        if irac.verbose>0:
+        if irac.verbose>1:
             print 'Reading in fits file {0} of {1}...'\
                   .format( i+1, irac.nfits )
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
@@ -204,7 +204,7 @@ def centroids( irac ):
     for i in range( irac.nfits ):
 
         fitsfile = os.path.join( irac.ddir, irac.fitsfiles[i] )
-        if irac.verbose>0:
+        if irac.verbose>1:
             print fitsfile
 
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
@@ -222,7 +222,7 @@ def centroids( irac ):
                 fullarray = data[j,:,:]
                 k = np.sum( irac.nsub[:i] ) + j
 
-            if irac.verbose>0:
+            if irac.verbose>1:
                 print 'Centroiding frame {0} of {1} using {2}...'\
                       .format( k+1, irac.nframes, method )
 
@@ -347,17 +347,19 @@ def centroids( irac ):
         print '\n'
 
     # Stand-alone text files containing the centroids:
+    header = 'x, y'
+    output_fmt = '%.6f %.6f'
     if method=='fluxweight':
-        ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords' )
+        ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords', fmt=output_fmt, header=header )
         np.savetxt( ofilename, irac.xy_fluxweight )
     elif method=='gauss1d':
-        ofilename = os.path.join( irac.adir, 'xy_gauss1d.coords' )
+        ofilename = os.path.join( irac.adir, 'xy_gauss1d.coords', fmt=output_fmt, header=header )
         np.savetxt( ofilename, irac.xy_gauss1d )
     elif method=='gauss2d':
-        ofilename = os.path.join( irac.adir, 'xy_gauss2d.coords' )
+        ofilename = os.path.join( irac.adir, 'xy_gauss2d.coords', fmt=output_fmt, header=header )
         np.savetxt( ofilename, irac.xy_gauss2d )
     elif method=='iraf':
-        ofilename = os.path.join( irac.adir, 'xy_iraf.coords' )
+        ofilename = os.path.join( irac.adir, 'xy_iraf.coords', fmt=output_fmt, header=header )
         np.savetxt( ofilename, irac.xy_iraf )
     if np.sum( irac.goodbad )<nstart:
         print 'Flagged {0:d} of {1:d} frames as bad due to large pointing shifts or other problems'\
