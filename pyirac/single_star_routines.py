@@ -281,6 +281,8 @@ def centroids( irac ):
             fullarray -= bg
 
             # Identify the box surrounding the starting guess xy-coordinates:
+            if (i==131)*(j==2699):
+                pdb.set_trace()
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
             xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
@@ -350,17 +352,17 @@ def centroids( irac ):
     header = 'x, y'
     output_fmt = '%.6f %.6f'
     if method=='fluxweight':
-        ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords', fmt=output_fmt, header=header )
-        np.savetxt( ofilename, irac.xy_fluxweight )
+        ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords' )
+        np.savetxt( ofilename, irac.xy_fluxweight, fmt=output_fmt, header=header )
     elif method=='gauss1d':
-        ofilename = os.path.join( irac.adir, 'xy_gauss1d.coords', fmt=output_fmt, header=header )
-        np.savetxt( ofilename, irac.xy_gauss1d )
+        ofilename = os.path.join( irac.adir, 'xy_gauss1d.coords' )
+        np.savetxt( ofilename, irac.xy_gauss1d, fmt=output_fmt, header=header )
     elif method=='gauss2d':
-        ofilename = os.path.join( irac.adir, 'xy_gauss2d.coords', fmt=output_fmt, header=header )
-        np.savetxt( ofilename, irac.xy_gauss2d )
+        ofilename = os.path.join( irac.adir, 'xy_gauss2d.coords' )
+        np.savetxt( ofilename, irac.xy_gauss2d, fmt=output_fmt, header=header )
     elif method=='iraf':
-        ofilename = os.path.join( irac.adir, 'xy_iraf.coords', fmt=output_fmt, header=header )
-        np.savetxt( ofilename, irac.xy_iraf )
+        ofilename = os.path.join( irac.adir, 'xy_iraf.coords' )
+        np.savetxt( ofilename, irac.xy_iraf, fmt=output_fmt, header=header )
     if np.sum( irac.goodbad )<nstart:
         print 'Flagged {0:d} of {1:d} frames as bad due to large pointing shifts or other problems'\
               .format( int( nstart-np.sum( irac.goodbad ) ), irac.nframes )
@@ -377,7 +379,11 @@ def fluxweight_centroid( subarray, xsub, ysub ):
     Used to also have fluxweight2d, but realised that
     is mathematically identical and nearly 50% slower.
     """
-    
+
+    # Negative flux values bias the output, so
+    # set minimum value to be zero:
+    subarray -= subarray.min()
+    # Calculate the flux-weighted mean:
     marginal_x = np.sum( subarray, axis=0 )
     marginal_y = np.sum( subarray, axis=1 )
     fluxsumx = np.sum( marginal_x )
@@ -397,6 +403,10 @@ def gauss1d_centroid( subarray, xsub, ysub, channel ):
     yet worked out how the gcntrd routine is actually doing this, so I'm sticking with
     the scipy optimisation routines for now.
     """
+
+    # Negative flux values bias the output, so
+    # set minimum value to be zero:
+    subarray -= subarray.min()
 
     marg_x = np.sum( subarray, axis=0 )
     marg_y = np.sum( subarray, axis=1 )
@@ -457,6 +467,10 @@ def gauss2d_centroid(  subarray, xsub, ysub, channel ):
     """
     """
 
+    # Negative flux values bias the output, so
+    # set minimum value to be zero:
+    subarray -= subarray.min()
+
     fluxsum = np.sum( subarray )
     xmesh, ymesh = np.meshgrid( xsub, ysub )
     mux0 = np.sum( xmesh*subarray )/fluxsum
@@ -499,6 +513,10 @@ def gauss2d_centroid(  subarray, xsub, ysub, channel ):
 def gauss2d_centroid_WITH_ROTATION(  subarray, xsub, ysub, channel ):
     """
     """
+
+    # Negative flux values bias the output, so
+    # set minimum value to be zero:
+    subarray -= subarray.min()
 
     fluxsum = np.sum( subarray )
     xmesh, ymesh = np.meshgrid( xsub, ysub )
