@@ -193,8 +193,8 @@ def centroids( irac ):
         irac.xy_method = 'iraf'
 
     # Guess xy-coordinates for first frame:
-    xguess = irac.init_xy[0]
-    yguess = irac.init_xy[1]
+    #xguess = irac.init_xy[0] # pretty sure these lines aren't 
+    #yguess = irac.init_xy[1] # actually used....
     if irac.verbose>0:
         print '\nCalculating centroids within a {0}x{0} pixel box'\
               .format( boxwidth )
@@ -281,8 +281,8 @@ def centroids( irac ):
             fullarray -= bg
 
             # Identify the box surrounding the starting guess xy-coordinates:
-            if (i==131)*(j==2699):
-                pdb.set_trace()
+            #if (i==131)*(j==2699):
+            #    pdb.set_trace()
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
             xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
@@ -419,14 +419,17 @@ def gauss1d_centroid( subarray, xsub, ysub, channel ):
     B0_y = marg_y.max() - A0_y
     if channel==1:
         w0 = 0.5*1.66/1.221
-    if channel==2:
+    elif channel==2:
         w0 = 0.5*1.72/1.213
-    if channel==3:
+    elif channel==3:
         w0 = 0.5*1.88/1.222
-    if channel==4:
+    elif channel==4:
         w0 = 0.5*1.98/1.220
     elif channel==None:
         w0 = 0.5*1.5/1.220
+    else:
+        print '{0} for channel not understood'.format( channel )
+        pdb.set_trace()
 
     nf = 10
     mx = int( len( xsub )*nf )
