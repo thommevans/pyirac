@@ -193,8 +193,9 @@ def centroids( irac ):
         irac.xy_method = 'iraf'
 
     # Guess xy-coordinates for first frame:
-    #xguess = irac.init_xy[0] # pretty sure these lines aren't 
-    #yguess = irac.init_xy[1] # actually used....
+    xguess = irac.init_xy[0]
+    yguess = irac.init_xy[1]
+    xyguess = np.array( [ xguess, yguess ] )
     if irac.verbose>0:
         print '\nCalculating centroids within a {0}x{0} pixel box'\
               .format( boxwidth )
@@ -237,11 +238,18 @@ def centroids( irac ):
             xfull = np.arange( nx )
             yfull = np.arange( ny )
             xmesh, ymesh = np.meshgrid( xfull, yfull )
-            yix, xix = np.unravel_index( np.argmax( fullarray ), \
-                                         np.shape( fullarray ) )
-            xguess = xfull[xix]
-            yguess = yfull[yix]
-            xyguess = np.array( [ xguess, yguess ] )
+
+            ## NOTE: This is untested, but I don't think that we want
+            ## to just blindly take the pixel coordinates of the brightest
+            ## pixel in each frame; instead, we want to use whatever is
+            ## currently recorded as xyguess; if this is the first frame,
+            ## xyguess will be whatever was entered manually; if it not the
+            ## first frame, then it will be whatever the xy coordinates
+            ## determine in the last frame that was not flagged as bad were
+            #yix, xix = np.unravel_index( np.argmax( fullarray ), \
+            #                             np.shape( fullarray ) )
+            #xguess = xfull[xix]
+            #yguess = yfull[yix]
             if irac.bg_kwargs['method']=='annulus_circle':
                 bg_pixs = get_annulus_circle_pixs( fullarray, xmesh, ymesh, xyguess, \
                                                    irac.ap_radius, \
@@ -281,8 +289,6 @@ def centroids( irac ):
             fullarray -= bg
 
             # Identify the box surrounding the starting guess xy-coordinates:
-            #if (i==131)*(j==2699):
-            #    pdb.set_trace()
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
             xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
@@ -336,6 +342,7 @@ def centroids( irac ):
                 # guess as the starting guess for next frame:
                 xguess = x0
                 yguess = y0
+                xyguess = np.array( [ x0, y0 ] )
             else:
                 # Otherwise, assume it was an anomaly and
                 # use the value from the previous frame as
