@@ -146,7 +146,8 @@ def centroids( irac ):
             print 'Reading in fits file {0} of {1}...'\
                   .format( i+1, irac.nfits )
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-        dims = hdu[0].info['dims']
+        #dims = hdu[0].info['dims'] # worked with fitsio v0.9.0
+        dims = hdu[0].get_info()['dims'] # works with fitsio v0.9.5
         hdu.close()
         if len( dims )==2:
             irac.nsub[i] = 1
