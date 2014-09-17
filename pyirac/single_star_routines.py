@@ -210,7 +210,8 @@ def centroids( irac ):
             print fitsfile
 
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-        data = hdu[0].read_image()
+        #data = hdu[0].read_image() # worked with fitsio v0.9.0
+        data = hdu[0].read() # works with fitsio v0.9.5
         hdu.close()
 
         # Account for the possibility that the fits
@@ -763,7 +764,8 @@ def preclean( irac, iters=2 ):
 
     # Read in the first image:
     hdu = fitsio.FITS( irac.fitsfiles[0], 'r' )
-    data = hdu[0].read_image()
+    #data = hdu[0].read_image() # worked with fitsio v0.9.0
+    data = hdu[0].read() # works with fitsio v0.9.5
     if irac.nsub[0]==1:
         fullarray0 = data
     else:
@@ -811,7 +813,8 @@ def preclean( irac, iters=2 ):
         break_loop = False
         for i in range( ix+1 ):
             hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            fits_data_i = hdu[0].read_image()
+            #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
+            fits_data_i = hdu[0].read() # works with fitsio v0.9.5
             hdu.close()
             for j in range( irac.nsub[i] ):
                 k = np.sum( irac.nsub[:i] ) + j
@@ -835,7 +838,8 @@ def preclean( irac, iters=2 ):
         for i in range( irac.nfits ):
 
             hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            data_i = hdu[0].read_image()
+            #data_i = hdu[0].read_image() # worked with fitsio v0.9.0
+            data_i = hdu[0].read() # works with fitsio v0.9.5
             hdu.close()
 
             for j in range( irac.nsub[i] ):
@@ -869,6 +873,8 @@ def preclean( irac, iters=2 ):
                         if i_lead_new!=i_lead:
                             hdu = fitsio.FITS( irac.fitsfiles[i_lead_new], 'r' )
                             data_lead = hdu[0].read_image()
+                            #data_lead = hdu[0].read_image() # worked with fitsio v0.9.0
+                            data_lead = hdu[0].read() # works with fitsio v0.9.5
                             hdu.close()
                             i_lead = i_lead_new
                         else:
@@ -1003,7 +1009,8 @@ def bg_subtract( irac ):
 
         # Read in the contents of the ith FITS file:
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-        fits_data_i = hdu[0].read_image()
+        #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
+        fits_data_i = hdu[0].read() # works with fitsio v0.9.5
         hdu.close()
 
         for j in range( irac.nsub[i] ):
@@ -1214,7 +1221,8 @@ def ap_phot( irac, save_pngs=False ):
 
         # Read in the contents of the ith FITS file:
         hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-        fits_data_i = hdu[0].read_image()
+        #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
+        fits_data_i = hdu[0].read() # works with fitsio v0.9.5
         hdu.close()
 
         for j in range( irac.nsub[i] ):
