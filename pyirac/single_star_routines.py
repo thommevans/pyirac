@@ -296,6 +296,8 @@ def centroids( irac ):
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
             xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
+            # NOTE: non-finite pixel values might screw things up here...
+            # might be necessary to deal with this sort of thing at some point...
 
             if ( k==0 ):
                 # If it's the first frame, locate the peak 
