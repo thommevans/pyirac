@@ -269,6 +269,8 @@ def centroids( irac ):
                 pdb.set_trace() # no other methods implemented yet
                 
             # Two-pass sigma clipping:
+            ixs = np.isfinite( bg_pixs )
+            bg_pixs = bg_pixs[ixs]
             bg_med = np.median( bg_pixs )
             bg_stdv = np.std( bg_pixs )
             delta_sigmas = ( bg_pixs - bg_med )/bg_stdv
