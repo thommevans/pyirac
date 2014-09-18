@@ -182,20 +182,22 @@ def centroids( irac ):
     maxshift = 2
     if boxwidth%2==0:
         boxwidth += 1
+    # For xy arrays, first column is x, second column is y,
+    # and third column is the noise pixel value:
     if method=='fluxweight':
-        irac.xy_fluxweight = np.zeros( [ irac.nframes, 2 ] )
+        irac.xy_fluxweight = np.zeros( [ irac.nframes, 3 ] )
         irac.xy_method = 'fluxweight'
     elif method=='gauss1d':
-        irac.xy_gauss1d = np.zeros( [ irac.nframes, 2 ] )
+        irac.xy_gauss1d = np.zeros( [ irac.nframes, 3 ] )
         irac.xy_method = 'gauss1d'
     elif method=='gauss2d':
-        irac.xy_gauss2d = np.zeros( [ irac.nframes, 2 ] )
+        irac.xy_gauss2d = np.zeros( [ irac.nframes, 3 ] )
         irac.xy_method = 'gauss2d'
     elif method=='iraf':
         from pyraf import iraf
         iraf.digiphot()
         iraf.apphot()
-        irac.xy_iraf = np.zeros( [ irac.nframes, 2 ] )
+        irac.xy_iraf = np.zeros( [ irac.nframes, 3 ] )
         irac.xy_method = 'iraf'
 
     # Guess xy-coordinates for first frame:
@@ -329,24 +331,29 @@ def centroids( irac ):
                 else:
                     peak_prev = peak_curr
 
+            nphbw = irac.noisepix_half_boxwidth
             if method=='fluxweight':
                 x0, y0 = fluxweight_centroid( subarray, xsub, ysub )
                 irac.xy_fluxweight[k,0] = x0
                 irac.xy_fluxweight[k,1] = y0
+                irac.xy_fluxweight[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw ) # !!must write this routine!!
             elif method=='gauss1d':
                 x0, y0, wx, wy = gauss1d_centroid( subarray, xsub, ysub, irac.channel )
                 irac.xy_gauss1d[k,0] = x0
                 irac.xy_gauss1d[k,1] = y0
+                irac.xy_gauss1d[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw )
             elif method=='gauss2d':
                 x0, y0, wx, wy = gauss2d_centroid( subarray, xsub, ysub, irac.channel )
                 irac.xy_gauss2d[k,0] = x0
                 irac.xy_gauss2d[k,1] = y0
+                irac.xy_gauss2d[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw )
             elif method=='iraf':
                 xguess, yguess = fluxweight_centroid( subarray, xsub, ysub )
                 xyguess = np.array( [ xguess, yguess ] )
                 x0, y0 = iraf_centroid( irac.adir, fitsfile, xyguess, j, boxwidth )
                 irac.xy_iraf[k,0] = x0
                 irac.xy_iraf[k,1] = y0
+                irac.xy_iraf[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw )
                     
             # Check how much the pointing has changed since previous frame:
             npixshift_max = 2
@@ -369,8 +376,8 @@ def centroids( irac ):
         print '\n'
 
     # Stand-alone text files containing the centroids:
-    header = 'x, y'
-    output_fmt = '%.6f %.6f'
+    header = 'x, y, noisepix'
+    output_fmt = '%.6f %.6f %.6f'
     if method=='fluxweight':
         ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords' )
         np.savetxt( ofilename, irac.xy_fluxweight, fmt=output_fmt, header=header )
@@ -1352,6 +1359,22 @@ def cut_subarray( fullarray, xcent, ycent, boxwidth ):
 
     return subarray, xsub, ysub
 
+
+def calc_noisepixel( fullarray, x0, y0, noisepix_half_boxwidth ):
+
+    ny, nx = np.shape( fullarray )
+    x = np.arange( nx )
+    xl = int( np.floor( x0 - noisepix_half_boxwidth ) )
+    xu = int( np.floor( x0 + noisepix_half_boxwidth ) )
+    ixs_x = ( x>=xl )*( x<=xu )*( x>=0 )*( x<nx )
+    y = np.arange( ny )
+    yl = int( np.floor( y0 - noisepix_half_boxwidth ) )
+    yu = int( np.floor( y0 + noisepix_half_boxwidth ) )    
+    ixs_y = ( y>=yl )*( y<=yu )*( y>=0 )*( y<ny )
+    subarray = fullarray[ixs_y,:][:,ixs_x]
+    noisepix = ( np.sum( subarray )**2. )/np.sum( subarray**2. )
+    return noisepix
+    
 
 def save_table( irac, ofilename=None ):
     """
