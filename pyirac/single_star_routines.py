@@ -6,9 +6,11 @@ import matplotlib.pyplot as plt
 import scipy.optimize
 import scipy.interpolate
 import scipy.spatial
-from pyraf import iraf # MAKE THIS OPTIONAL
-iraf.digiphot()
-iraf.apphot()
+# The IRAF imports have been moved to routines below
+# so they only happen if requested specifically:
+#from pyraf import iraf 
+#iraf.digiphot()
+#iraf.apphot()
 
 """
 
@@ -190,6 +192,9 @@ def centroids( irac ):
         irac.xy_gauss2d = np.zeros( [ irac.nframes, 2 ] )
         irac.xy_method = 'gauss2d'
     elif method=='iraf':
+        from pyraf import iraf
+        iraf.digiphot()
+        iraf.apphot()
         irac.xy_iraf = np.zeros( [ irac.nframes, 2 ] )
         irac.xy_method = 'iraf'
 
@@ -270,6 +275,8 @@ def centroids( irac ):
                 
             # Two-pass sigma clipping:
             ixs = np.isfinite( bg_pixs )
+            if ixs.max()==False:
+                pdb.set_trace() # shouldn't happen
             bg_pixs = bg_pixs[ixs]
             bg_med = np.median( bg_pixs )
             bg_stdv = np.std( bg_pixs )
@@ -1196,6 +1203,9 @@ def ap_phot( irac, save_pngs=False ):
     elif irac.xy_method=='gauss2d':
         xy = irac.xy_gauss2d
     elif irac.xy_method=='iraf':
+        from pyraf import iraf 
+        iraf.digiphot()
+        iraf.apphot()
         xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method either None or not recognised' )
