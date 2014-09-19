@@ -16,6 +16,7 @@ class irac():
         self.init_xy = None
         self.bjd = None
         self.ap_radius = 3
+        self.ap_radius_noisepix_params = [ 0, 0 ]
         self.noisepix_half_boxwidth = 6
         self.fluxstar = None
         self.shotstar = None

@@ -890,7 +890,6 @@ def preclean( irac, iters=2 ):
                         # the one we already have open:
                         if i_lead_new!=i_lead:
                             hdu = fitsio.FITS( irac.fitsfiles[i_lead_new], 'r' )
-                            data_lead = hdu[0].read_image()
                             #data_lead = hdu[0].read_image() # worked with fitsio v0.9.0
                             data_lead = hdu[0].read() # works with fitsio v0.9.5
                             hdu.close()
@@ -1237,6 +1236,11 @@ def ap_phot( irac, save_pngs=False ):
         print 'Doing non-interpolated aperture photometry:'
     print '(aperture radius = {0} pixels)'.format( irac.ap_radius )
 
+    if irac.ap_radius=='variable_noisepix':
+        a0 = irac.ap_radius_noisepix_params[0]
+        a1 = irac.ap_radius_noisepix_params[0]
+    else:
+        ap_radius = irac.ap_radius
     
     for i in range( irac.nfits ):
 
@@ -1266,6 +1270,11 @@ def ap_phot( irac, save_pngs=False ):
             xcent = xy[k,0]
             ycent = xy[k,1]
 
+            # Noise pixel value:
+            noisepix = xy[k,2]
+            if irac.ap_radius=='variable_noisepix':
+                ap_radius = a0*noisepix + a1
+            
             # Cut subarray from full frame:
             subarray, xsub, ysub = cut_subarray( fullarray, xcent, ycent, photom_boxwidth )
             # Bilinear interpolation of subarray:
@@ -1282,7 +1291,7 @@ def ap_phot( irac, save_pngs=False ):
             pixdists = scipy.spatial.distance.cdist( xysubpixs, xy_cent )
             # Keep those subpixels with centers falling
             # within the aperture:
-            ixs = ( pixdists.flatten()<irac.ap_radius )
+            ixs = ( pixdists.flatten()<ap_radius )
             zfap = zf[ixs] * MJysr2electrons 
             nsubpixs = len( zfap )
             # Sum the subpixels falling within the aperture
@@ -1306,10 +1315,10 @@ def ap_phot( irac, save_pngs=False ):
                                           ymeshf.min(), ymeshf.max() ], \
                             origin='lower', interpolation='nearest' )
                 plt.plot( [ xcent ], [ ycent ], 'ok' )
-                plt.axvline( xcent - irac.ap_radius, c='k' )
-                plt.axvline( xcent + irac.ap_radius, c='k' )
-                plt.axhline( ycent - irac.ap_radius, c='k' )
-                plt.axhline( ycent + irac.ap_radius, c='k' )
+                plt.axvline( xcent - ap_radius, c='k' )
+                plt.axvline( xcent + ap_radius, c='k' )
+                plt.axhline( ycent - ap_radius, c='k' )
+                plt.axhline( ycent + ap_radius, c='k' )
                 cwd = os.getcwd()
                 ofolder = os.path.join( cwd, 'photimages' )
                 if os.path.isdir( ofolder )==False:
