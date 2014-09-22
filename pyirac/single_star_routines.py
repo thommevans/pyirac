@@ -780,7 +780,7 @@ def preclean( irac, iters=2 ):
         a1 = irac.ap_radius_noisepix_params[0]
         ap_radii = a0*np.sqrt( xy[:,2] ) + a1
     else:
-        ap_radii = irac.ap_radius*np.ones( irac.nframes )
+        ap_radii = irac.ap_radius*np.ones( ixs.sum() )
     xl = int( np.floor( np.min( xy[:,0] - ap_radii ) ) )
     xu = int( np.ceil( np.max( xy[:,0] + ap_radii ) ) )
     yl = int( np.floor( np.min( xy[:,1] - ap_radii ) ) )
@@ -972,16 +972,11 @@ def preclean( irac, iters=2 ):
                     
     nremoved_f = nstart - np.sum( irac.goodbad )
     if nremoved_f>0:
-        if nremoved_f==1:
-            frame_str = 'frame'
-        else:
-            frame_str = 'frames'
-        print 'Removing {0:d} {1} due to discrepant pixels...'\
-              .format( int( nremoved_f ), frame_str )
+        print 'Removing {0:d} of {1:d} frames due to discrepant pixels...'\
+              .format( int( nremoved_f ), int( irac.goodbad.sum() ) )
     else:
         print 'No frames removed due to discrepant pixels...'
     return None
-
 
 
 def bg_subtract( irac ):
