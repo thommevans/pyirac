@@ -774,11 +774,17 @@ def preclean( irac, iters=2 ):
     # containing the photometry aperture:
     ixs = ( irac.goodbad==1 )
     xy = xy[ixs,:]
-    halfbox = irac.ap_radius
-    xl = int( np.floor( np.min( xy[:,0] ) - halfbox ) )
-    xu = int( np.ceil( np.max( xy[:,0] ) + halfbox ) )
-    yl = int( np.floor( np.min( xy[:,1] ) - halfbox ) )
-    yu = int( np.ceil( np.max( xy[:,1] ) + halfbox ) )
+
+    if irac.ap_radius=='variable_noisepix':
+        a0 = irac.ap_radius_noisepix_params[0]
+        a1 = irac.ap_radius_noisepix_params[0]
+        ap_radii = a0*np.sqrt( xy[:,2] ) + a1
+    else:
+        ap_radii = irac.ap_radius*np.ones( irac.nframes )
+    xl = int( np.floor( np.min( xy[:,0] - ap_radii ) ) )
+    xu = int( np.ceil( np.max( xy[:,0] + ap_radii ) ) )
+    yl = int( np.floor( np.min( xy[:,1] - ap_radii ) ) )
+    yu = int( np.ceil( np.max( xy[:,1] + ap_radii ) ) )
 
     # Read in the first image:
     hdu = fitsio.FITS( irac.fitsfiles[0], 'r' )
@@ -791,7 +797,7 @@ def preclean( irac, iters=2 ):
     hdu.close()
 
     # Account for possibility of subarray being
-    # right near the chip edge:
+    # right near the chip edge: 
     naxis1 = np.shape( fullarray0 )[1]
     naxis2 = np.shape( fullarray0 )[0]
     if xl<0: xl = 0
@@ -1010,6 +1016,13 @@ def bg_subtract( irac ):
     irac.bg_ppix = -1*np.ones( irac.nframes )
     MJysr2electrons = irac.exptime*irac.gain/irac.fluxconv
 
+    if irac.ap_radius=='variable_noisepix':
+        a0 = irac.ap_radius_noisepix_params[0]
+        a1 = irac.ap_radius_noisepix_params[0]
+        ap_radii = a0*np.sqrt( xy[:,2] ) + a1
+    else:
+        ap_radii = irac.ap_radius*np.ones( irac.nframes )
+
     if irac.verbose>0:
         if irac.bg_kwargs['method']=='annulus_circle':
             print 'Calculating the background flux in annulus centered on star'
@@ -1059,19 +1072,17 @@ def bg_subtract( irac ):
                 annulus_inedge = irac.bg_kwargs['annulus_inedge']
                 annulus_width = irac.bg_kwargs['annulus_width']
                 bg_pixs = get_annulus_circle_pixs( fullarray, xmesh, ymesh, xycentroid, \
-                                                   irac.ap_radius, \
-                                                   irac.bg_kwargs['annulus_inedge'], \
+                                                   ap_radii[k], irac.bg_kwargs['annulus_inedge'], \
                                                    irac.bg_kwargs['annulus_width'] )
             elif irac.bg_kwargs['method']=='corners':
                 bg_pixs = get_corner_pixs( fullarray, xmesh, ymesh, xycentroid, \
-                                           irac.ap_radius, \
-                                           irac.bg_kwargs['ncorner'] )
+                                           ap_radii[k], irac.bg_kwargs['ncorner'] )
             elif irac.bg_kwargs['method']=='custom_mask':
                 bg_pixs = get_corner_pixs( fullarray, xmesh, ymesh, xycentroid, \
-                                           irac.ap_radius, \
-                                           irac.bg_kwargs['custom_mask'] )
+                                           ap_radii[k], irac.bg_kwargs['custom_mask'] )
 
             # Two-pass sigma clipping:
+            bg_pixs = bg_pixs[ np.isfinite( bg_pixs ) ]
             bg_med = np.median( bg_pixs )
             bg_stdv = np.std( bg_pixs )
             delta_sigmas = ( bg_pixs - bg_med )/bg_stdv
@@ -1081,14 +1092,13 @@ def bg_subtract( irac ):
             delta_sigmas = ( bg_pixs[ixs_keep_1] - bg_med )/bg_stdv
             ixs_keep_2 = ( delta_sigmas < nsigma_clip )
             bg_pixs = bg_pixs[ixs_keep_1][ixs_keep_2]
-                
+
             if irac.bg_kwargs['value']=='median':
                 irac.bg_ppix[k] = np.median( bg_pixs )*MJysr2electrons
             elif irac.bg_kwargs['value']=='mean':
                 irac.bg_ppix[k] = np.mean( bg_pixs )*MJysr2electrons
             else:
                 pdb.set_trace() # none implemented yet
-                
     print 'Done.'
         
     irac.fluxstar = -1*np.ones( irac.nframes )
@@ -1217,10 +1227,17 @@ def ap_phot( irac, save_pngs=False ):
         raise AttributeError( 'xy_method either None or not recognised' )
     if xy==None:
         raise AttributeError( 'centroid xy coordinates must be calculated first' )
-    photom_boxwidth = 2.*irac.ap_radius + 3.
 
     if irac.goodbad==None:
         irac.preclean()
+
+    if irac.ap_radius=='variable_noisepix':
+        a0 = irac.ap_radius_noisepix_params[0]
+        a1 = irac.ap_radius_noisepix_params[0]
+        ap_radii = a0*np.sqrt( xy[:,2] ) + a1
+    else:
+        ap_radii = irac.ap_radius*np.ones( irac.nframes )
+    photom_boxwidth = 2.*ap_radii[irac.goodbad==1].max() + 3.
 
     # Data units to electrons:
     irac.fluxraw = -1*np.ones( irac.nframes )
@@ -1234,13 +1251,12 @@ def ap_phot( irac, save_pngs=False ):
         nfine = int( ( photom_boxwidth - 1. )*irac.ninterp )
     else:
         print 'Doing non-interpolated aperture photometry:'
-    print '(aperture radius = {0} pixels)'.format( irac.ap_radius )
 
     if irac.ap_radius=='variable_noisepix':
-        a0 = irac.ap_radius_noisepix_params[0]
-        a1 = irac.ap_radius_noisepix_params[0]
+        print '(variable radii from {0:.2f} to {1:.2f} pixels)'\
+              .format( ap_radii[irac.goodbad==1].min(), ap_radii[irac.goodbad==1].max() )
     else:
-        ap_radius = irac.ap_radius
+        print '(aperture radius = {0:.2f} pixels)'.format( irac.ap_radius )
     
     for i in range( irac.nfits ):
 
@@ -1269,11 +1285,6 @@ def ap_phot( irac, save_pngs=False ):
             # Center of aperture:
             xcent = xy[k,0]
             ycent = xy[k,1]
-
-            # Noise pixel value:
-            noisepix = xy[k,2]
-            if irac.ap_radius=='variable_noisepix':
-                ap_radius = a0*noisepix + a1
             
             # Cut subarray from full frame:
             subarray, xsub, ysub = cut_subarray( fullarray, xcent, ycent, photom_boxwidth )
@@ -1291,7 +1302,7 @@ def ap_phot( irac, save_pngs=False ):
             pixdists = scipy.spatial.distance.cdist( xysubpixs, xy_cent )
             # Keep those subpixels with centers falling
             # within the aperture:
-            ixs = ( pixdists.flatten()<ap_radius )
+            ixs = ( pixdists.flatten()<ap_radii[k] )
             zfap = zf[ixs] * MJysr2electrons 
             nsubpixs = len( zfap )
             # Sum the subpixels falling within the aperture
@@ -1315,10 +1326,10 @@ def ap_phot( irac, save_pngs=False ):
                                           ymeshf.min(), ymeshf.max() ], \
                             origin='lower', interpolation='nearest' )
                 plt.plot( [ xcent ], [ ycent ], 'ok' )
-                plt.axvline( xcent - ap_radius, c='k' )
-                plt.axvline( xcent + ap_radius, c='k' )
-                plt.axhline( ycent - ap_radius, c='k' )
-                plt.axhline( ycent + ap_radius, c='k' )
+                plt.axvline( xcent - ap_radii[k], c='k' )
+                plt.axvline( xcent + ap_radii[k], c='k' )
+                plt.axhline( ycent - ap_radii[k], c='k' )
+                plt.axhline( ycent + ap_radii[k], c='k' )
                 cwd = os.getcwd()
                 ofolder = os.path.join( cwd, 'photimages' )
                 if os.path.isdir( ofolder )==False:
