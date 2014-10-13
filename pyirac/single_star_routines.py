@@ -378,6 +378,8 @@ def centroids( irac ):
     # Stand-alone text files containing the centroids:
     header = 'x, y, noisepix'
     output_fmt = '%.6f %.6f %.6f'
+    if os.path.isdir( irac.adir )==False:
+        os.makedirs( irac.adir )
     if method=='fluxweight':
         ofilename = os.path.join( irac.adir, 'xy_fluxweight.coords' )
         np.savetxt( ofilename, irac.xy_fluxweight, fmt=output_fmt, header=header )
