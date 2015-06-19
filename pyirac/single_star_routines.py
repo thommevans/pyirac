@@ -336,7 +336,7 @@ def centroids( irac ):
                 x0, y0 = fluxweight_centroid( subarray, xsub, ysub )
                 irac.xy_fluxweight[k,0] = x0
                 irac.xy_fluxweight[k,1] = y0
-                irac.xy_fluxweight[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw ) # !!must write this routine!!
+                irac.xy_fluxweight[k,2] = calc_noisepixel( fullarray, x0, y0, nphbw )
             elif method=='gauss1d':
                 x0, y0, wx, wy = gauss1d_centroid( subarray, xsub, ysub, irac.channel )
                 irac.xy_gauss1d[k,0] = x0
@@ -1378,7 +1378,6 @@ def cut_subarray( fullarray, xcent, ycent, boxwidth ):
 
 
 def calc_noisepixel( fullarray, x0, y0, noisepix_half_boxwidth ):
-
     ny, nx = np.shape( fullarray )
     x = np.arange( nx )
     xl = int( np.floor( x0 - noisepix_half_boxwidth ) )
