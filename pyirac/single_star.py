@@ -58,6 +58,11 @@ class irac():
         """
         single_star_routines.centroids( self )
 
+    def extract_pix_timeseries( self ):
+        """
+        """
+        single_star_routines.extract_pix_timeseries( self )
+
     def preclean( self ):
         """
         """
