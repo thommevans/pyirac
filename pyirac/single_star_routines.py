@@ -133,10 +133,8 @@ def extract_pix_timeseries( irac ):
     """
     Extracts flux timeseries for a subarray of pixels.
     """
-
     boxwidth = irac.pix_timeseries_boxwidth # width of subarray in pixels
-    xix, yix = irac.pix_timeseries_central_ixs # indices of subarry center
-    
+    xix, yix = irac.pix_timeseries_central_ixs # indices of subarry center    
     npix = int( boxwidth*boxwidth )
     irac.pix_timeseries = np.zeros( [ int( irac.nsub.sum() ), npix ] )
     counter = 0
@@ -148,8 +146,6 @@ def extract_pix_timeseries( irac ):
         hdu.close()
         xl = int( np.round( xix-0.5*( boxwidth-1 ) ) )
         yl = int( np.round( yix-0.5*( boxwidth-1 ) ) )
-        dims = hdu[0].get_info()['dims'] # works with fitsio v0.9.5
-        hdu.close()
         for m in range( irac.nsub[i] ):
             ix = 0
             for j in range( boxwidth ):
@@ -158,8 +154,6 @@ def extract_pix_timeseries( irac ):
                     irac.pix_timeseries[counter,ix] = subarr[j,k]
                     ix += 1
             counter += 1
-    
-    pdb.set_trace()
     return None
 
 def centroids( irac ):
