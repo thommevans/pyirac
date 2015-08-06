@@ -76,7 +76,7 @@ def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', 
             dgrs[key] = np.abs( grs[key]-1 )
             if dgrs[key]>max_dgr:
                 max_dgr = dgrs[key]
-            print key, grs[key]
+                print key, grs[key]
         print '(require minimum {0} steps to have been taken before finishing)'.format( nsteps_min )
         if ( max_dgr<0.01 )*( nsteps>nsteps_min ):
             converged = True
@@ -564,18 +564,35 @@ def mpfit_linmodel_secondary( data, syspars, basis, make_plot=False ):
     coeffs_init = np.zeros( ncoeffs )
     coeffs_init[0] = 1.0
     def resids_func( pars, fjac=None, x=None, y=None, err=None ):
-        if ( pars[0]<0 )+( pars[2]<0 ):
-            status = 0
-            resids = (1e10)*np.ones( ndat )
-            return status, resids
-        else:
+        #if ( pars[0]<0 )+( pars[2]<0 ):
+        #    status = 0
+        #    resids = (1e10)*np.ones( ndat )
+        #    return status, resids
+        #else:
+        if 1:
             syspars['SecDepth'] = pars[0]
             syspars['T0'] = T0_approx + pars[1]
             #syspars['T0'] = 2456252.85107 + pars[1]
             #syspars['aRs'] = pars[2]
             #syspars['b'] = pars[3]
             #syspars['incl'] = np.rad2deg( np.arccos( syspars['b']/syspars['aRs'] ) )
-            psignal = transit.ma02_aRs( data['bjd'], **syspars )
+            psignal = transit.ma02_aRs( data['bjd'], **syspars )            
+            #print 'aaaaa', pars[0], psignal.min(), psignal.max(), len(data['bjd'])
+            #print 'ccccccc', len( data['bjd'] )
+            if 0:
+
+                plt.figure()
+                print syspars['T0'], pars[1]
+                bjd2=np.r_[data['bjd'].min()-0.6*syspars['P']:data['bjd'].max()+0.6*syspars['P']:1j*700]
+                syspars['tr_type'] = 'both'
+                psignal2=transit.ma02_aRs( bjd2, **syspars )
+                syspars['tr_type'] = 'secondary'
+                psignal3=transit.ma02_aRs( bjd2, **syspars )
+                plt.plot(data['bjd'],data['flux'],'.c')
+                plt.plot(bjd2,psignal2,'-r')
+                plt.plot(bjd2,psignal2,'--k')
+                plt.plot(data['bjd'],psignal,'-g')
+                pdb.set_trace()
             coeffs = pars[2:2+ncoeffs]
             systematics = np.dot( basis, coeffs )
             resids = data['flux'].flatten() - psignal.flatten()*systematics.flatten()
@@ -591,6 +608,7 @@ def mpfit_linmodel_secondary( data, syspars, basis, make_plot=False ):
                 plt.axvline(syspars['T0'])
                 pdb.set_trace()
             return status, resids
+    #syspars['SecDepth']=0.002
     transit_init = np.array( [ syspars['SecDepth'], 0.0 ] )
     pars_init = np.concatenate( [ transit_init, coeffs_init ] )
     fa = { 'x':data['bjd'], 'y':data['flux'], 'err':data['uncs'] }
@@ -631,7 +649,10 @@ def mpfit_linmodel_secondary( data, syspars, basis, make_plot=False ):
 
     if make_plot==True:
         plt.figure()
-        plt.plot(data['bjd'],data['flux']/systematics,'.k')
+        tb, fb, stdvs, npb = utils.bin_1d( data['bjd'], data['flux']/systematics, nbins=100 )
+        ixs = npb>1
+        plt.plot(data['bjd'],data['flux']/systematics,'.c')
+        plt.plot(tb[ixs], fb[ixs], 'ok')
         plt.plot(data['bjd'],psignal,'-r')
         while syspars['T0']<data['bjd'].min():
             syspars['T0'] += syspars['P']
@@ -895,7 +916,8 @@ def gp_freecov_model_secondary( data, syspars, transitvars, channel, ramp_type, 
         Axy = pyhm.Gamma( 'Axy', alpha=1, beta=1e4 )
         iLx = pyhm.Uniform( 'iLx', lower=0, upper=1000 )
         iLy = pyhm.Uniform( 'iLy', lower=0, upper=1000 )
-        beta = pyhm.Uniform( 'beta', lower=-0.9, upper=2 )
+        #beta = pyhm.Uniform( 'beta', lower=-0.9, upper=2 )
+        beta = pyhm.Uniform( 'beta', lower=0., upper=2 )
 
         covpars = { 'At':At, 'iLt':iLt, 'Axy':Axy, 'iLx':iLx, 'iLy':iLy, 'beta':beta }
         parents = transitvars.copy()
