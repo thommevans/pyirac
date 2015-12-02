@@ -8,6 +8,146 @@ import irac_kernels
 from planetc import transit
 import utils
 
+
+
+
+def get_chain_from_walkers( walker_chains, acor_integs, ncorr_burn=3, lc_type='white' ):
+    nchains = len( walker_chains )
+    acor = np.zeros( nchains )
+    nsteps = np.zeros( nchains )
+    nwalkers = np.zeros( nchains )
+    for i in range( nchains ):
+        walker_chain = walker_chains[i]
+        nsteps[i], nwalkers[i] = np.shape( walker_chain['logp'] )
+        keys = walker_chain.keys()
+        keys.remove( 'logp' )
+        npar = len( keys )
+        acor_vals = np.zeros( npar )
+        for j in range( npar ):
+            acor_vals[j] = acor_integs[i][keys[j]]
+        acor[i] = np.max( np.abs( acor_vals ) )
+    y = nsteps/acor
+    if y.min()<ncorr_burn:
+        print '\nChains only run for {0:.2f}x correlation times'.format( y.min() )
+        pdb.set_trace()
+    else:
+        acor = acor.max()
+        nburn = int( np.round( ncorr_burn*acor ) )
+        chain_dicts = []
+        chain_arrs = []
+        for i in range( nchains ):
+            chain_i = pyhm.collapse_walker_chain( walker_chains[i], nburn=nburn )
+            if lc_type=='white':
+                try:
+                    chain_i['incl'] = np.rad2deg( np.arccos( chain_i['b']/chain_i['aRs'] ) )
+                except:
+                    pass
+            elif lc_type=='spec':
+                pass
+            else:
+                pdb.set_trace()
+            chain_dicts += [ chain_i ]
+        grs = pyhm.gelman_rubin( chain_dicts, nburn=0, thin=1 )
+        chain = pyhm.combine_chains( chain_dicts, nburn=nburn, thin=1 )        
+    chain['tdepth'] = chain['RpRs']**2.
+    grs['tdepth'] = grs['RpRs']
+    return chain, grs, nchains, nwalkers, nsteps, acor, nburn
+
+
+def run_gp_mcmc_emcee( gp_mle_filepath, gp_chains_filepath, channel='ch1', dataset_type='primary', \
+                       nchains=2, nwalkers=150, nsteps=150, ncorr_burn=3 ):
+
+    ifile = open( gp_mle_filepath )
+    z = cPickle.load( ifile )
+    ifile.close()
+
+    data = z['data']
+    syspars = z['syspars']
+    mle_results = z['mle_results']
+    #pretune = z['mcmc_pretune']
+    T0_approx = z['T0_approx']
+    syspars['T0'] = T0_approx
+
+    if ( channel=='ch1' )+( channel=='ch2' ):
+        covpars = { 'At':mle_results['At'], 'Lt':1./mle_results['iLt'], 'Axy':mle_results['Axy'], \
+                    'Lxy':np.array( [ 1./mle_results['iLx'], 1./mle_results['iLy'] ] ), \
+                    'beta':mle_results['beta'] }
+    elif ( channel=='ch3' )+( channel=='ch4' ):
+        pdb.set_trace()
+
+    mbundle, gp = get_gp_fixedcov_mbundle( data, syspars, covpars, channel=channel, \
+                                            dataset_type=dataset_type )
+
+
+    # This is currently taken from MultiBandRoutines:
+    import TransitFitting
+    z = TransitFitting.MultiBand()
+    z.lc_type = 'white'
+    z.mbundle = mbundle
+    z.par_ranges = {}
+    for key in mle_results.keys():
+        mlev = mle_results[key]
+        z.par_ranges[key] = pyhm.Gaussian( key, mu=mlev, sigma=(1e-3)*np.abs( mlev ) )
+    z.nchains = nchains
+    z.nsteps = nsteps
+    z.nwalkers = nwalkers
+    z.mcmc()
+
+    chain, grs, nchains, nwalkers, nsteps, acor, nburn = get_chain_from_walkers( z.walker_chains, z.acor_integs, \
+                                                                                 ncorr_burn=ncorr_burn, \
+                                                                                 lc_type=z.lc_type )
+    y = pyhm.chain_properties( chain, nburn=0, thin=None, print_to_screen=True )    
+
+    npar = len( y['median'].keys() )
+    outstr = '#Param Med Unc_l34 Unc_u34 Fixed'
+    if dataset_type=='primary':
+        outstr += '\nRpRs {0:.6f} {1:.6f} {2:.6f} 0'\
+                  .format( y['median']['RpRs'], np.abs( y['l34']['RpRs'] ), y['u34']['RpRs'] )
+        outstr += '\naRs {0:.3f} {1:.3f} {2:.3f} 0'\
+                  .format( y['median']['aRs'], np.abs( y['l34']['aRs'] ), y['u34']['aRs'] )
+        outstr += '\nb {0:.3f} {1:.3f} {2:.3f} 0'\
+                  .format( y['median']['b'], np.abs( y['l34']['b'] ), y['u34']['b'] )
+        outstr += '\nincl {0:.3f} {1:.3f} {2:.3f} 0'\
+                  .format( y['median']['incl'], np.abs( y['l34']['incl'] ), y['u34']['incl'] )
+    elif dataset_type=='secondary':
+        outstr += '\nSecDepth {0:.6f} {1:.6f} {2:.6f} 0'\
+                  .format( y['median']['SecDepth'], np.abs( y['l34']['SecDepth'] ), y['u34']['SecDepth'] )
+    outstr += '\nT0 {0:.6f} {1:.6f} {2:.6f} 0'\
+              .format( T0_approx+y['median']['delT'], np.abs( y['l34']['delT'] ), y['u34']['delT'] )
+    if dataset_type=='primary':
+        outstr += '\necc {0:.4f} 0 0 1'.format( syspars['ecc'] )
+        outstr += '\nomega {0:.4f} 0 0 1'.format( syspars['omega'] )
+    elif dataset_type=='secondary':
+        outstr += '\nRpRs {0:.4f} 0 0 1'.format( syspars['RpRs'] )
+        outstr += '\nb {0:.4f} 0 0 1'.format( syspars['b'] )
+        outstr += '\naRs {0:.4f} 0 0 1'.format( syspars['aRs'] )
+        outstr += '\nincl {0:.4f} 0 0 1'.format( syspars['incl'] )
+        outstr += '\necc {0:.4f} 0 0 1'.format( syspars['ecc'] )
+        outstr += '\nomega {0:.4f} 0 0 1'.format( syspars['omega'] )
+    print outstr    
+
+    output = { 'data':data, 'syspars':syspars }
+    output['T0_approx'] = T0_approx
+    output['mle_results'] = z.mle_refined#mle_results
+    output['mcmc_results'] = {}
+    output['mcmc_results']['walker_chains'] = z.walker_chains
+    output['mcmc_results']['chain_properties'] = y
+    output['mcmc_results']['grs'] = grs
+    output['mcmc_results']['ncorr_burn'] = ncorr_burn
+    if os.path.isdir( os.path.dirname( gp_chains_filepath ) )==False:
+        os.makedirs( os.path.dirname( gp_chains_filepath ) )
+    ofile = open( gp_chains_filepath, 'w' )
+    cPickle.dump( output, ofile )
+    ofile.close()
+    gp_chains_filepath_str = gp_chains_filepath.replace( '.pkl', '.txt' )
+    ofile = open( gp_chains_filepath_str, 'w' )
+    ofile.write( outstr )
+    ofile.close()
+    print '\nSaved:\n{0}\n{1}'.format( gp_chains_filepath, gp_chains_filepath_str )
+
+    return output
+
+
 def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', dataset_type='primary', \
                         nchains=5, nsteps_increment=10000, nburn_frac=0.5 ):
 
@@ -131,6 +271,7 @@ def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', 
     print '\nSaved:\n{0}\n{1}'.format( gp_chains_filepath, gp_chains_filepath_str )
 
     return output
+
 
 def run_gp_mcmc_pretune( mle_ifilepath, pretune_ofilepath, channel='ch1', dataset_type='primary', \
                          tune_interval=42, nsteps=50000, nburn=30000 ):
