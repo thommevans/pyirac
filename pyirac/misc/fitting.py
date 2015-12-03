@@ -55,7 +55,7 @@ def get_chain_from_walkers( walker_chains, acor_integs, ncorr_burn=3, lc_type='w
 
 
 def run_gp_mcmc_emcee( gp_mle_filepath, gp_chains_filepath, channel='ch1', dataset_type='primary', \
-                       nchains=2, nwalkers=150, nsteps=150, ncorr_burn=3 ):
+                       nchains=2, nwalkers=150, nsteps=150, ncorr_burn=3, orbpar_priors={} ):
 
     ifile = open( gp_mle_filepath )
     z = cPickle.load( ifile )
@@ -76,7 +76,7 @@ def run_gp_mcmc_emcee( gp_mle_filepath, gp_chains_filepath, channel='ch1', datas
         pdb.set_trace()
 
     mbundle, gp = get_gp_fixedcov_mbundle( data, syspars, covpars, channel=channel, \
-                                            dataset_type=dataset_type )
+                                           orbpar_priors=orbpar_priors, dataset_type=dataset_type )
 
 
     # This is currently taken from MultiBandRoutines:
@@ -149,7 +149,7 @@ def run_gp_mcmc_emcee( gp_mle_filepath, gp_chains_filepath, channel='ch1', datas
 
 
 def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', dataset_type='primary', \
-                        nchains=5, nsteps_increment=10000, nburn_frac=0.5 ):
+                        nchains=5, nsteps_increment=10000, nburn_frac=0.5, orbpar_priors={} ):
 
     ifile = open( gp_pretune_filepath )
     z = cPickle.load( ifile )
@@ -170,7 +170,7 @@ def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', 
         pdb.set_trace()
 
     mbundle, gp = get_gp_fixedcov_mbundle( data, syspars, covpars, channel=channel, \
-                                            dataset_type=dataset_type )
+                                           orbpar_priors=orbpar_priors, dataset_type=dataset_type )
     mcmcs = []
 
     for i in range( nchains ):
@@ -274,7 +274,7 @@ def run_gp_mcmc_chains( gp_pretune_filepath, gp_chains_filepath, channel='ch1', 
 
 
 def run_gp_mcmc_pretune( mle_ifilepath, pretune_ofilepath, channel='ch1', dataset_type='primary', \
-                         tune_interval=42, nsteps=50000, nburn=30000 ):
+                         tune_interval=42, nsteps=50000, nburn=30000, orbpar_priors={} ):
     
     ifile = open( mle_ifilepath )
     z = cPickle.load( ifile )
@@ -294,7 +294,7 @@ def run_gp_mcmc_pretune( mle_ifilepath, pretune_ofilepath, channel='ch1', datase
         pdb.set_trace()
 
     mbundle, gp = get_gp_fixedcov_mbundle( data, syspars, covpars, channel=channel, \
-                                           dataset_type=dataset_type )
+                                           orbpar_priors=orbpar_priors, dataset_type=dataset_type )
     mcmc = pyhm.MCMC( mbundle )
     mcmc.assign_step_method( pyhm.BuiltinStepMethods.MetropolisHastings )
     mcmc.step_method.assign_proposal_distribution( pyhm.BuiltinProposals.diagonal_gaussian )
@@ -334,7 +334,7 @@ def run_gp_mcmc_pretune( mle_ifilepath, pretune_ofilepath, channel='ch1', datase
     return output
 
 def run_gp_mle( data, syspars, mle_ofilepath, initial_ranges={}, channel='ch1', dataset_type='primary', \
-                prefit_ntrials=3, prefit_nbins=250, make_plot=True ):
+                prefit_ntrials=3, prefit_nbins=250, orbpar_priors={}, make_plot=True ):
     """
     """
 
@@ -349,8 +349,8 @@ def run_gp_mle( data, syspars, mle_ofilepath, initial_ranges={}, channel='ch1', 
     datab['uncs'] /= np.sqrt( npb[ixs] )
 
     # Get the model bundles:
-    mbundleb, gpb = get_gp_freecov_mbundle( datab, syspars, dataset_type=dataset_type )
-    mbundle, gp = get_gp_freecov_mbundle( data, syspars, dataset_type=dataset_type )
+    mbundleb, gpb = get_gp_freecov_mbundle( datab, syspars, dataset_type=dataset_type, orbpar_priors=orbpar_priors )
+    mbundle, gp = get_gp_freecov_mbundle( data, syspars, dataset_type=dataset_type, orbpar_priors=orbpar_priors )
 
     mpb = pyhm.MAP( mbundleb )
     mcmcb = pyhm.MCMC( mbundleb )
@@ -807,13 +807,20 @@ def mpfit_linmodel_secondary( data, syspars, basis, make_plot=False ):
     return output
 
 
-def get_gp_fixedcov_mbundle( data, syspars, covpars, channel='ch1', ramp_type=None, dataset_type='primary' ):
+def get_gp_fixedcov_mbundle( data, syspars, covpars, channel='ch1', ramp_type=None, \
+                             orbpar_priors={}, dataset_type='primary' ):
 
     delT = pyhm.Uniform( 'delT', lower=-2./24., upper=2./24. )
     if dataset_type=='primary':
+        if orbpar_priors=={}:
+            orbpar_priors = None
         RpRs = pyhm.Uniform( 'RpRs', lower=0.5*syspars['RpRs'], upper=1.5*syspars['RpRs'] )
-        aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
-        b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
+        if orbpar_priors!=None:
+            aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
+            b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
+        else:
+            aRs = orbpar_priors['aRs']
+            b = orbpar_priors['b']
         transitvars = { 'RpRs':RpRs, 'aRs':aRs, 'b':b, 'delT':delT } # these can be free or fixed
         parents, gp_logp, gp_obj = gp_fixedcov_model_primary( data, syspars, transitvars, covpars, channel, \
                                                               ramp_type, verbose=1 )
@@ -833,15 +840,22 @@ def get_gp_fixedcov_mbundle( data, syspars, covpars, channel='ch1', ramp_type=No
     return mbundle, gp_obj
 
 
-def get_gp_freecov_mbundle( data, syspars, channel='ch1', ramp_type=None, dataset_type='primary' ):
+def get_gp_freecov_mbundle( data, syspars, channel='ch1', ramp_type=None, \
+                            orbpar_priors={}, dataset_type='primary' ):
     """
     """
 
     delT = pyhm.Uniform( 'delT', lower=-2./24., upper=2./24. )
     if dataset_type=='primary':
+        if orbpar_priors=={}:
+            orbpar_priors = None
         RpRs = pyhm.Uniform( 'RpRs', lower=0.5*syspars['RpRs'], upper=1.5*syspars['RpRs'] )
-        aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
-        b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
+        if orbpar_priors!=None:
+            aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
+            b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
+        else:
+            aRs = orbpar_priors['aRs']
+            b = orbpar_priors['b']
         transitvars = { 'RpRs':RpRs, 'aRs':aRs, 'b':b, 'delT':delT } # these can be free or fixed
         parents, gp_logp, gp_obj = gp_freecov_model_primary( data, syspars, transitvars, channel, \
                                                              ramp_type, verbose=1 )
