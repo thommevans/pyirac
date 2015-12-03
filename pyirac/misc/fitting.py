@@ -815,7 +815,7 @@ def get_gp_fixedcov_mbundle( data, syspars, covpars, channel='ch1', ramp_type=No
         if orbpar_priors=={}:
             orbpar_priors = None
         RpRs = pyhm.Uniform( 'RpRs', lower=0.5*syspars['RpRs'], upper=1.5*syspars['RpRs'] )
-        if orbpar_priors!=None:
+        if orbpar_priors==None:
             aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
             b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
         else:
@@ -850,7 +850,7 @@ def get_gp_freecov_mbundle( data, syspars, channel='ch1', ramp_type=None, \
         if orbpar_priors=={}:
             orbpar_priors = None
         RpRs = pyhm.Uniform( 'RpRs', lower=0.5*syspars['RpRs'], upper=1.5*syspars['RpRs'] )
-        if orbpar_priors!=None:
+        if orbpar_priors==None:
             aRs = pyhm.Uniform( 'aRs', lower=0.5*syspars['aRs'], upper=1.5*syspars['aRs'] )
             b = pyhm.Uniform( 'b', lower=0.5*syspars['b'], upper=1.5*syspars['b'] )
         else:
