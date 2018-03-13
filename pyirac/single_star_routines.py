@@ -1,6 +1,9 @@
+from __future__ import print_function
 import pdb, os, sys, warnings, time
-import fitsio
-import atpy
+#import fitsio
+import astropy.io.fits as pyfits
+#import atpy
+from astropy.table import Table, Column
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize
@@ -57,15 +60,17 @@ def read_headers( irac ):
     readnoises = np.empty( 0, dtype=float )
     fluxconvs = np.empty( 0, dtype=float )
     obsblocks = np.empty( 0, dtype=int )
-    print '\nReading headers for frame mid-times, readnoise, gain etc'
+    print( '\nReading headers for frame mid-times, readnoise, gain etc' )
 
     for i in range( nfits ):
 
         fitsfile = os.path.join( irac.ddir, irac.fitsfiles[i] )
         if irac.verbose>1:
-            print fitsfile
-        hdu = fitsio.FITS( fitsfile, 'r' )
-        header = hdu[0].read_header()
+            print( fitsfile )
+        #hdu = fitsio.FITS( fitsfile, 'r' )
+        #header = hdu[0].read_header()
+        header = hdu[0].header
+        hdu = pyfits.open( fitsfile )
         hdu.close()
         if header['NAXIS']==3:
             naxis3 = header['NAXIS3']
@@ -124,7 +129,7 @@ def read_headers( irac ):
         warnings.warn( 'fluxconvs not all identical - taking median' )
         irac.fluxconv = np.median( fluxconvs )
     irac.frame_obsblocks = obsblocks
-    print 'Done.'
+    print( 'Done.' )
 
     return None
 
@@ -140,9 +145,11 @@ def extract_pix_timeseries( irac ):
     counter = 0
     for i in range( irac.nfits ):
         # Read in the contents of the ith FITS file:
-        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
         #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-        fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        #fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        hdu = pyfits.open( irac.fitsfiles[i] )
+        fits_data_i = hdu[0].data
         hdu.close()
         xl = int( np.round( xix-0.5*( boxwidth-1 ) ) )
         yl = int( np.round( yix-0.5*( boxwidth-1 ) ) )
@@ -172,11 +179,12 @@ def centroids( irac ):
     irac.nsub = np.zeros( irac.nfits, dtype=int )
     for i in range( irac.nfits ):
         if irac.verbose>1:
-            print 'Reading in fits file {0} of {1}...'\
-                  .format( i+1, irac.nfits )
-        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+            print( 'Reading in fits file {0} of {1}...'\
+                   .format( i+1, irac.nfits ) )
+        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        hdu = pyfits.open( irac.fitsfiles[i] )
         #dims = hdu[0].info['dims'] # worked with fitsio v0.9.0
-        dims = hdu[0].get_info()['dims'] # works with fitsio v0.9.5
+        dims = hdu[0].shape
         hdu.close()
         if len( dims )==2:
             irac.nsub[i] = 1
@@ -188,7 +196,7 @@ def centroids( irac ):
 
     # Start off assuming all frames are good,
     # unless told otherwise:
-    if irac.goodbad==None:
+    if irac.goodbad is None:
         irac.goodbad = np.ones( irac.nframes )
 
     # Number of frames flagged as good
@@ -232,8 +240,8 @@ def centroids( irac ):
     yguess = irac.init_xy[1]
     xyguess = np.array( [ xguess, yguess ] )
     if irac.verbose>0:
-        print '\nCalculating centroids within a {0}x{0} pixel box'\
-              .format( boxwidth )
+        print( '\nCalculating centroids within a {0}x{0} pixel box'\
+               .format( boxwidth ) )
 
     # Apply centroiding algorithm one image at a time:
     suspicious_ks = []
@@ -241,11 +249,13 @@ def centroids( irac ):
 
         fitsfile = os.path.join( irac.ddir, irac.fitsfiles[i] )
         if irac.verbose>1:
-            print fitsfile
+            print( fitsfile )
 
-        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        hdu = pyfits.open( irac.fitsfiles[i] )
         #data = hdu[0].read_image() # worked with fitsio v0.9.0
-        data = hdu[0].read() # works with fitsio v0.9.5
+        #data = hdu[0].read() # works with fitsio v0.9.5
+        data = hdu[0].data
         hdu.close()
 
         # Account for the possibility that the fits
@@ -260,8 +270,8 @@ def centroids( irac ):
                 k = np.sum( irac.nsub[:i] ) + j
 
             if irac.verbose>1:
-                print 'Centroiding frame {0} of {1} using {2}...'\
-                      .format( k+1, irac.nframes, method )
+                print( 'Centroiding frame {0} of {1} using {2}...'\
+                       .format( k+1, irac.nframes, method ) )
 
             # Check if current frame has already been
             # flagged as bad:
@@ -330,6 +340,16 @@ def centroids( irac ):
 
             # Identify the box surrounding the starting guess xy-coordinates:
             subarray, xsub, ysub = cut_subarray( fullarray, xguess, yguess, boxwidth )
+
+            #plt.close('all')
+            #plt.figure()
+            #plt.imshow(fullarray,interpolation='nearest',aspect='auto')
+            #plt.plot( xguess, yguess, 'om' )
+            #plt.figure()
+            #plt.imshow(subarray,interpolation='nearest',aspect='auto',extent=[xsub.min(),xsub.max(),ysub.min(),ysub.max()])
+            #plt.plot( xguess, yguess, 'om' )
+            #pdb.set_trace()
+
             xrefined, yrefined = fluxweight_centroid( subarray, xsub, ysub )
             subarray, xsub, ysub = cut_subarray( fullarray, xrefined, yrefined, boxwidth )
             # NOTE: non-finite pixel values might screw things up here...
@@ -344,14 +364,14 @@ def centroids( irac ):
                 peak_curr = np.max( subarray )
                 delpeak = abs( peak_curr/float( peak_prev ) - 1. )
                 if abs( peak_prev - peak_curr )>0.5*abs( peak_prev ):
-                    print '\nDiscarding suspicious frame due to >50%'
-                    print 'frame-to-frame change in peak pixel value:'
+                    print( '\nDiscarding suspicious frame due to >50%' )
+                    print( 'frame-to-frame change in peak pixel value:' )
                     fitsfile_name = os.path.basename( fitsfile )
                     if irac.nsub[i]==1:
-                        print '--> frame {0}'.format( fitsfile_name )
+                        print( '--> frame {0}'.format( fitsfile_name ) )
                     else:
-                        print '--> frame {0} in {1}'.format( j+1, fitsfile_name )
-                    print 'due to >50% frame-to-frame change in peak pixel value'
+                        print( '--> frame {0} in {1}'.format( j+1, fitsfile_name ) )
+                    print( 'due to >50% frame-to-frame change in peak pixel value' )
                     irac.goodbad[k] = 0
                     peak_prev = peak_curr
                     suspicious_ks += [ k ]
@@ -398,9 +418,9 @@ def centroids( irac ):
                                .format( npixshift_max ) )
 
     if len( suspicious_ks )>1:
-        print '\nNumber of images between successive suspicious images:'
-        print np.diff( np.array( suspicious_ks ) )
-        print '\n'
+        print( '\nNumber of images between successive suspicious images:' )
+        print( np.diff( np.array( suspicious_ks ) ) )
+        print( '\n' )
 
     # Stand-alone text files containing the centroids:
     header = 'x, y, noisepix'
@@ -420,12 +440,12 @@ def centroids( irac ):
         ofilename = os.path.join( irac.adir, 'xy_iraf.coords' )
         np.savetxt( ofilename, irac.xy_iraf, fmt=output_fmt, header=header )
     if np.sum( irac.goodbad )<nstart:
-        print 'Flagged {0:d} of {1:d} frames as bad due to large pointing shifts or other problems'\
-              .format( int( nstart-np.sum( irac.goodbad ) ), irac.nframes )
+        print( 'Flagged {0:d} of {1:d} frames as bad due to large pointing shifts or other problems'\
+               .format( int( nstart-np.sum( irac.goodbad ) ), irac.nframes ) )
 
     if irac.verbose>0:
-        print 'Saved xy coords in {0}'.format( ofilename )
-        print 'Done.'
+        print( 'Saved xy coords in {0}'.format( ofilename ) )
+        print( 'Done.' )
     
     return None
 
@@ -446,6 +466,11 @@ def fluxweight_centroid( subarray, xsub, ysub ):
     x0 = np.sum( xsub*marginal_x )/fluxsumx
     fluxsumy = np.sum( marginal_y )
     y0 = np.sum( ysub*marginal_y )/fluxsumy
+
+    #plt.figure()
+    #plt.imshow(subarray,interpolation='nearest',aspect='auto',extent=[x0.min()-0.5,x0.max()+0.5,y0.min()-0.5,y0.max()+0.5])
+    #plt.plot(x0,y0,'oc')
+    #pdb.set_trace()
 
     return x0, y0
 
@@ -481,10 +506,10 @@ def gauss1d_centroid( subarray, xsub, ysub, channel ):
         w0 = 0.5*1.88/1.222
     elif channel==4:
         w0 = 0.5*1.98/1.220
-    elif channel==None:
+    elif channel is None:
         w0 = 0.5*1.5/1.220
     else:
-        print '{0} for channel not understood'.format( channel )
+        print( '{0} for channel not understood'.format( channel ) )
         pdb.set_trace()
 
     nf = 10
@@ -544,7 +569,7 @@ def gauss2d_centroid(  subarray, xsub, ysub, channel ):
         w0 = 0.5*1.88/1.222
     if channel==4:
         w0 = 0.5*1.98/1.220
-    elif channel==None:
+    elif channel is None:
         w0 = 0.5*1.5/1.220
     rot0 = 0.0
     xvals = xmesh.flatten()
@@ -591,7 +616,7 @@ def gauss2d_centroid_WITH_ROTATION(  subarray, xsub, ysub, channel ):
         w0 = 0.5*1.88/1.222
     if channel==4:
         w0 = 0.5*1.98/1.220
-    elif channel==None:
+    elif channel is None:
         w0 = 0.5*1.5/1.220
     rot0 = 0.0
     xvals = xmesh.flatten()
@@ -693,8 +718,12 @@ def preclean( irac, iters=2 ):
 
     # Start off assuming all frames are good,
     # unless told otherwise:
-    if irac.goodbad==None:
+    if irac.goodbad is None:
         irac.goodbad = np.ones( irac.nframes )
+    if irac.goodbad_xy is None:
+        irac.goodbad_xy = np.ones( irac.nframes )
+    if irac.goodbad_flux is None:
+        irac.goodbad_flux = np.ones( irac.nframes )
 
     nslide = 30
 
@@ -709,26 +738,29 @@ def preclean( irac, iters=2 ):
         nsigma_clip = 5.
     else:
         nsigma_clip = 4.
-    print '\nPrecleaning xy shifts: {0} iterations of {1}-sigma clipping'\
-          .format( iters, nsigma_clip )
-    print '(centroids over {0} unflagged frames)'\
-          .format( int( np.sum( irac.goodbad ) ) )
+    print( '\nPrecleaning xy shifts: {0} iterations of {1}-sigma clipping'\
+           .format( iters, nsigma_clip ) )
+    print( '(centroids over {0} unflagged frames)'\
+           .format( int( np.sum( irac.goodbad ) ) ) )
 
     # Retrieve the xy chip coordinates
     # that have already been determined
     # by the centroids() routine:
-    print '\nUsing centroids determined by {0} method...'\
-          .format( irac.xy_method )
+    print( '\nUsing centroids determined by {0} method...'\
+           .format( irac.xy_method ) )
     if irac.xy_method=='fluxweight':
-        xy = irac.xy_fluxweight
+        xyfull = irac.xy_fluxweight
     elif irac.xy_method=='gauss1d':
-        xy = irac.xy_gauss1d
+        xyfull = irac.xy_gauss1d
     elif irac.xy_method=='gauss2d':
-        xy = irac.xy_gauss2d
+        xyfull = irac.xy_gauss2d
     elif irac.xy_method=='iraf':
-        xy = irac.xy_iraf
+        xyfull = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method attribute not recognised' )
+
+    # Remove the noisepixel (third) column:
+    xyfull = xyfull[:,:2]
 
     # Slide across all frames in the dataset,
     # iterating more than once if requested:
@@ -750,7 +782,7 @@ def preclean( irac, iters=2 ):
                 elif ( k>=nslide )*( k<=irac.nframes-nslide ):
                     # Equal trailing and ahead:
                     ix1 = k - nslide
-                    ix2 = k + nslide + 1
+                    ix2 = k + 1 + nslide
                 elif ( k>irac.nframes-nslide )*( irac.nframes>nslide ):
                     # Less ahead
                     ix1 = k - nslide
@@ -759,11 +791,11 @@ def preclean( irac, iters=2 ):
                     pdb.set_trace() # shouldn't happen
 
                 # xy values in block behind current point:
-                xybehind = xy[ix1:k,:]
+                xybehind = xyfull[ix1:k,:]
                 gbbehind = ( irac.goodbad[ix1:k]==1 )
 
                 # xy values in block ahead of current point:
-                xyahead = xy[k+1:ix2+1,:]
+                xyahead = xyfull[k+1:ix2,:]
                 gbahead = ( irac.goodbad[k+1:ix2]==1 )
 
                 # Combine the behind+ahead surrounding points:
@@ -774,35 +806,25 @@ def preclean( irac, iters=2 ):
                 # Calculate the median and scatter of surrounding points:
                 xymed = np.median( xycompare, axis=0 )
                 xystdv = np.std( xycompare, axis=0 )
-                nsigma = np.max( np.abs( xy[k,:] - xymed )/xystdv )
-
+                nsigma = np.max( np.abs( xyfull[k,:] - xymed )/xystdv )
+                
                 # If current point is outlier, flag it as bad:
                 if nsigma>=nsigma_clip:
                     if irac.verbose>0:
                         if irac.nsub[i]==1:
-                            print '--> discarding frame {0}'\
-                                  .format( os.path.basename( irac.fitsfiles[i] ) )
+                            print( '--> discarding frame {0} (iteration {1} of {2})'\
+                                   .format( os.path.basename( irac.fitsfiles[i], iteration+1, iters ) ) )
                         else:
-                            print '--> discarding frame {0} in {1}'\
-                                  .format( j+1, os.path.basename( irac.fitsfiles[i] ) )
+                            print( '--> discarding frame {0} in {1} (iteration {2} of {3})'\
+                                   .format( j+1, os.path.basename( irac.fitsfiles[i], iteration+1, iters ) ) )
+                    irac.goodbad_xy[k] = 0
                     irac.goodbad[k] = 0
-
-    nremoved_xy = nstart - np.sum( irac.goodbad )
-    if nremoved_xy>0:
-        if nremoved_xy==1:
-            frame_str = 'frame'
-        else:
-            frame_str = 'frames'
-        print 'Removing {0:d} {1} due to large xy shifts...'\
-              .format( int( nremoved_xy ), frame_str )
-    else:
-        print 'No frames removed due to large xy shifts...'
 
     # Second, identify frames where an anomalous
     # pixel count occurs anywhere within a subarray
     # containing the photometry aperture:
     ixs = ( irac.goodbad==1 )
-    xy = xy[ixs,:]
+    xy = xyfull[ixs,:]
 
     if irac.ap_radius=='variable_noisepix':
         a0 = irac.ap_radius_noisepix_params[0]
@@ -816,9 +838,8 @@ def preclean( irac, iters=2 ):
     yu = int( np.ceil( np.max( xy[:,1] + ap_radii ) ) )
 
     # Read in the first image:
-    hdu = fitsio.FITS( irac.fitsfiles[0], 'r' )
-    #data = hdu[0].read_image() # worked with fitsio v0.9.0
-    data = hdu[0].read() # works with fitsio v0.9.5
+    hdu = pyfits.open( irac.fitsfiles[0] )
+    data = hdu[0].data # works with fitsio v0.9.5
     if irac.nsub[0]==1:
         fullarray0 = data
     else:
@@ -844,17 +865,21 @@ def preclean( irac, iters=2 ):
     naxis1_sub = np.shape( frame0_sub )[1]
     naxis2_sub = np.shape( frame0_sub )[0]
     npixs_tot = naxis1_sub*naxis2_sub*np.sum( irac.goodbad )
+    xsub = np.arange( xl, xu+1 )
+    ysub = np.arange( yl, yu+1 )
+    xysub = np.meshgrid( xsub, ysub )
+    xsub = xysub[0]
+    ysub = xysub[1]
     if npixs_tot<2e6:
         nsigma_clip = 4.
     else:
         nsigma_clip = 5.
-    print '\nPrecleaning pixel values: {0} iterations of {1}-sigma clipping'\
-          .format( iters, nsigma_clip )
-    print '({0} pixels over {1} unflagged frames)'\
-          .format( int( npixs_tot ), int( np.sum( irac.goodbad ) ) )
+    print( '\nPrecleaning pixel values: {0} iterations of {1}-sigma clipping'\
+           .format( iters, nsigma_clip ) )
+    print( '({0} pixels over {1} unflagged frames)'\
+           .format( int( npixs_tot ), int( np.sum( irac.goodbad ) ) ) )
 
     # Iterate the process more than once if requested:
-    nstart = np.sum( irac.goodbad )
     for iteration in range( iters ):
 
         # Initialise the train of subarrays that will be shifted across
@@ -865,9 +890,8 @@ def preclean( irac, iters=2 ):
         ix = np.arange( irac.nfits )[cs>=nslide+1][0]
         break_loop = False
         for i in range( ix+1 ):
-            hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-            fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+            hdu = pyfits.open( irac.fitsfiles[i] )
+            fits_data_i = hdu[0].data
             hdu.close()
             for j in range( irac.nsub[i] ):
                 k = np.sum( irac.nsub[:i] ) + j
@@ -889,12 +913,9 @@ def preclean( irac, iters=2 ):
         # all frames that contain anomalous pixel counts and flagging
         # them as bad:
         for i in range( irac.nfits ):
-
-            hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
-            #data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-            data_i = hdu[0].read() # works with fitsio v0.9.5
+            hdu = pyfits.open( irac.fitsfiles[i] )
+            data_i = hdu[0].data
             hdu.close()
-
             for j in range( irac.nsub[i] ):
 
                 # The train sliding is done up here at the top of the 
@@ -924,9 +945,8 @@ def preclean( irac, iters=2 ):
                         # Only read in a new fits file if it's not
                         # the one we already have open:
                         if i_lead_new!=i_lead:
-                            hdu = fitsio.FITS( irac.fitsfiles[i_lead_new], 'r' )
-                            #data_lead = hdu[0].read_image() # worked with fitsio v0.9.0
-                            data_lead = hdu[0].read() # works with fitsio v0.9.5
+                            hdu = pyfits.open( irac.fitsfiles[i_lead_new] )
+                            data_lead = hdu[0].data
                             hdu.close()
                             i_lead = i_lead_new
                         else:
@@ -990,21 +1010,31 @@ def preclean( irac, iters=2 ):
                 # Calculate how badly the worst pixel on the current
                 # frame deviates from the values in surrounding frames:
                 nsigmas = np.abs( fcurrent - fmedians )/fstdvs
-                if np.max( nsigmas )>nsigma_clip:                
-                    if irac.nsub[i]==1:
-                        print '--> discarding frame {0}'\
-                              .format( os.path.basename( irac.fitsfiles[i] ) )
-                    else:
-                        print '--> discarding frame {0} in {1}'\
-                              .format( j+1, os.path.basename( irac.fitsfiles[i] ) )
-                    irac.goodbad[k] = 0
-                    
-    nremoved_f = nstart - np.sum( irac.goodbad )
-    if nremoved_f>0:
-        print 'Removing {0:d} of {1:d} frames due to discrepant pixels...'\
-              .format( int( nremoved_f ), int( irac.goodbad.sum() ) )
+                if np.max( nsigmas )>nsigma_clip:
+                    ixsflagged = nsigmas>nsigma_clip
+                    dxflagged = xyfull[k,0]-xsub[ixsflagged].flatten()
+                    dyflagged = xyfull[k,1]-ysub[ixsflagged].flatten()
+                    dflagged = np.sqrt( dxflagged**2. + dyflagged**2. )
+                    # Flag if discrepant pixels are within 1.5x the aperture radius:
+                    if np.min( dflagged-1.5*irac.ap_radius )<0:
+                        if irac.nsub[i]==1:
+                            print( '--> discarding frame {0} (iteration {1} of {2})'\
+                                   .format( os.path.basename( irac.fitsfiles[i] ), iteration+1, iters ) )
+                        else:
+                            print( '--> discarding frame {0} in {1} (iteration {2} of {3})'\
+                                   .format( j+1, os.path.basename( irac.fitsfiles[i] ), iteration+1, iters ) )
+                        irac.goodbad[k] = 0
+                        irac.goodbad_flux[k] = 0
+    nremoved_xy = int( irac.nframes - irac.goodbad_xy.sum() )
+    nremoved_flux = int( irac.nframes - irac.goodbad_flux.sum() )
+    nremoved = nremoved_xy+nremoved_flux
+    if nremoved>0:
+        if nremoved!=irac.nframes-irac.goodbad.sum(): pdb.set_trace() # something went wrong
+        print( 'Removing {0:d} of {1:d} frames due to discrepant pixels...'.format( nremoved, irac.nframes ) )
+        print( '{0:d} due to anomalous xy-coord shifts, {1:d} due to anomalous flux counts'\
+               .format( nremoved_xy, nremoved_flux ) )
     else:
-        print 'No frames removed due to discrepant pixels...'
+        print( 'No frames removed due to discrepant pixels...' )
     return None
 
 
@@ -1015,9 +1045,9 @@ def bg_subtract( irac ):
     shot noise for the resulting stellar flux.
     """
 
-    print '\nRunning bg_subtract()...'
-    print '\nUsing centroids determined by {0} method...'\
-          .format( irac.xy_method )
+    print( '\nRunning bg_subtract()...' )
+    print( '\nUsing centroids determined by {0} method...'\
+          .format( irac.xy_method ) )
     if irac.xy_method=='fluxweight':
         xy = irac.xy_fluxweight
     elif irac.xy_method=='gauss1d':
@@ -1028,10 +1058,10 @@ def bg_subtract( irac ):
         xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method either None or not recognised' )
-    if xy==None:
+    if xy is None:
         raise AttributeError( 'centroid xy coordinates must be calculated first' )
 
-    if irac.goodbad==None:
+    if irac.goodbad is None:
         irac.preclean()
     if irac.nframes>1e5:
         nsigma_clip = 5
@@ -1049,22 +1079,24 @@ def bg_subtract( irac ):
 
     if irac.verbose>0:
         if irac.bg_kwargs['method']=='annulus_circle':
-            print 'Calculating the background flux in annulus centered on star'
-            print 'for each frame...'
+            print( 'Calculating the background flux in annulus centered on star' )
+            print( 'for each frame...' )
         elif irac.bg_kwargs['method']=='corners':
-            print 'Calculating the sky flux in {0}x{0} pixel corners of each image'\
-                  .format( irac.bg_kwargs['ncorner'], irac.bg_kwargs['ncorner'] )
-            print 'for each frame...'
+            print( 'Calculating the sky flux in {0}x{0} pixel corners of each image'\
+                  .format( irac.bg_kwargs['ncorner'], irac.bg_kwargs['ncorner'] ) )
+            print( 'for each frame...' )
         elif irac.bg_kwargs['method']=='custom_mask':
-            print 'Calculating the sky flux from pixels in custom-defined mask for each image'
-            print 'for each frame...'
+            print( 'Calculating the sky flux from pixels in custom-defined mask for each image' )
+            print( 'for each frame...' )
 
     for i in range( irac.nfits ):
 
         # Read in the contents of the ith FITS file:
-        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        hdu = pyfits.open( irac.fitsfiles[i] )
         #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-        fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        #fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        fits_data_i = hdu[0].data
         hdu.close()
 
         for j in range( irac.nsub[i] ):
@@ -1089,8 +1121,8 @@ def bg_subtract( irac ):
             if irac.goodbad[k]==0:
                 continue
             if k%500==0:
-                print '... up to frame {0} of {1} (in {2})'\
-                      .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) )
+                print( '... up to frame {0} of {1} (in {2})'\
+                       .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) ) )
             xycentroid = xy[k,:]
             if irac.bg_kwargs['method']=='annulus_circle':
                 annulus_inedge = irac.bg_kwargs['annulus_inedge']
@@ -1123,7 +1155,7 @@ def bg_subtract( irac ):
                 irac.bg_ppix[k] = np.mean( bg_pixs )*MJysr2electrons
             else:
                 pdb.set_trace() # none implemented yet
-    print 'Done.'
+    print( 'Done.' )
         
     irac.fluxstar = -1*np.ones( irac.nframes )
     irac.shotstar = -1*np.ones( irac.nframes )
@@ -1234,8 +1266,8 @@ def ap_phot( irac, save_pngs=False ):
     must be done separately with the bg_subtract() routine.
     """
     
-    print '\nUsing centroids determined by {0} method...'\
-          .format( irac.xy_method )
+    print( '\nUsing centroids determined by {0} method...'\
+           .format( irac.xy_method ) )
     if irac.xy_method=='fluxweight':
         xy = irac.xy_fluxweight
     elif irac.xy_method=='gauss1d':
@@ -1249,10 +1281,10 @@ def ap_phot( irac, save_pngs=False ):
         xy = irac.xy_iraf
     else:
         raise AttributeError( 'xy_method either None or not recognised' )
-    if xy==None:
+    if xy is None:
         raise AttributeError( 'centroid xy coordinates must be calculated first' )
 
-    if irac.goodbad==None:
+    if irac.goodbad is None:
         irac.preclean()
 
     if irac.ap_radius=='variable_noisepix':
@@ -1270,24 +1302,26 @@ def ap_phot( irac, save_pngs=False ):
 
     # Prepare for interpolated aperture photometry if requested:
     if irac.ninterp>1:
-        print 'Doing {0:d}x interpolated aperture photometry'.format( irac.ninterp )
+        print( 'Doing {0:d}x interpolated aperture photometry'.format( irac.ninterp ) )
         dAsub = ( 1./irac.ninterp )**2.
         nfine = int( ( photom_boxwidth - 1. )*irac.ninterp )
     else:
-        print 'Doing non-interpolated aperture photometry:'
+        print( 'Doing non-interpolated aperture photometry:' )
 
     if irac.ap_radius=='variable_noisepix':
-        print '(variable radii from {0:.2f} to {1:.2f} pixels)'\
-              .format( ap_radii[irac.goodbad==1].min(), ap_radii[irac.goodbad==1].max() )
+        print( '(variable radii from {0:.2f} to {1:.2f} pixels)'\
+               .format( ap_radii[irac.goodbad==1].min(), ap_radii[irac.goodbad==1].max() ) )
     else:
-        print '(aperture radius = {0:.2f} pixels)'.format( irac.ap_radius )
+        print( '(aperture radius = {0:.2f} pixels)'.format( irac.ap_radius ) )
     
     for i in range( irac.nfits ):
 
         # Read in the contents of the ith FITS file:
-        hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
+        hdu = pyfits.open( irac.fitsfiles[i] )
         #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-        fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        #fits_data_i = hdu[0].read() # works with fitsio v0.9.5
+        fits_data_i = hdu[0].data
         hdu.close()
 
         for j in range( irac.nsub[i] ):
@@ -1295,8 +1329,8 @@ def ap_phot( irac, save_pngs=False ):
             # Determine the current image number:
             k = np.sum( irac.nsub[:i] ) + j
             if k%500==0:
-                print '... up to frame {0} of {1} (in {2})'\
-                      .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) )
+                print( '... up to frame {0} of {1} (in {2})'\
+                       .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) ) )
             if irac.goodbad[k]==0:
                 continue
 
@@ -1363,10 +1397,10 @@ def ap_phot( irac, save_pngs=False ):
                 plt.savefig( figname )
                 plt.close()
         
-    print 'Done.'
-    print 'NOTE: Raw aperture fluxes have been calculated, but'
-    print 'the background must be subtracted separately with'
-    print 'the bg_subtract() method.'
+    print( 'Done.' )
+    print( 'NOTE: Raw aperture fluxes have been calculated, but' )
+    print( 'the background must be subtracted separately with' )
+    print( 'the bg_subtract() method.' )
     return None
 
 def cut_subarray( fullarray, xcent, ycent, boxwidth ):
@@ -1419,7 +1453,7 @@ def calc_noisepixel( fullarray, x0, y0, noisepix_half_boxwidth ):
     return noisepix
     
 
-def save_table( irac, ofilename=None ):
+def save_table( irac, ofilename=None, format='basic' ):
     """
     Generates and saved a FITS output table.
 
@@ -1455,39 +1489,42 @@ def save_table( irac, ofilename=None ):
       9. 'nframes_rejected' - Number of rejected frames.
     """
     opath = os.path.join( irac.adir, ofilename )
-    otable = atpy.Table()
-    otable.add_column( 'bjd', irac.bjd, \
-                       description='BJD at mid-exposure', unit='days' )
-    otable.add_column( 'nappixs', irac.nappixs, unit='pixel areas' )
-    otable.add_column( 'bg_ppix', irac.bg_ppix, unit='electrons' )
-    otable.add_column( 'fluxraw', irac.fluxraw, unit='electrons' )
-    otable.add_column( 'fluxstar', irac.fluxstar, unit='electrons' )
-    otable.add_column( 'shotstar', irac.shotstar, unit='electrons' )
-    otable.add_column( 'goodbad', irac.goodbad, unit='1=good, 0=bad' )
-    centroid_method = irac.centroid_kwargs['method']
-    otable.add_keyword( 'centroid_method', centroid_method )
-    if centroid_method=='gauss2d':
-        otable.add_column( 'xcent', irac.xy_gauss2d[:,0], unit='pixel' )
-        otable.add_column( 'ycent', irac.xy_gauss2d[:,1], unit='pixel' )
-    elif centroid_method=='fluxweight':
-        otable.add_column( 'xcent', irac.xy_fluxweight[:,0], unit='pixel' )
-        otable.add_column( 'ycent', irac.xy_fluxweight[:,1], unit='pixel' )
-    elif centroid_method=='gauss1d':
-        otable.add_column( 'xcent', irac.xy_gauss1d[:,0], unit='pixel' )
-        otable.add_column( 'ycent', irac.xy_gauss1d[:,1], unit='pixel' )
+    #otable = atpy.Table()
+    meta = {}
+    meta['centroid_method'] = centroid_method
     for key in irac.centroid_kwargs.keys():
-        if key!='method':
-            otable.add_keyword( key, irac.centroid_kwargs[key] )
-    otable.add_keyword( 'bg_method', irac.bg_kwargs['method'] )
-    otable.add_keyword( 'ap_radius (pixel lengths)', irac.ap_radius )
-    otable.add_keyword( 'gain (e/DN conversion)', irac.gain )
-    otable.add_keyword( 'readnoise (e/DN conversion)', irac.gain )
+        if key is not 'method':
+            meta[key] = irac.centroid_kwargs[key]
+    meta['bg_method'] = irac.bg_kwargs['method']
+    meta['ap_radius (pixel lengths)'] = irac.ap_radius
+    meta['gain (e/DN conversion)'] = irac.gain
+    meta['readnoise (e/DN conversion)'] = irac.gain
+    meta['nframes_total'] = nframes
+    meta['nframes_reject'] = nreject
+
+    otable = Table( meta=meta )
+    otable.add_column( Column( name='bjd', data=irac.bjd, \
+                       description='BJD at mid-exposure', unit='days' ) )
+    otable.add_column( Column( name='nappixs', data=irac.nappixs, unit='pixel areas' ) )
+    otable.add_column( Column( name='bg_ppix', data=irac.bg_ppix, unit='electrons' ) )
+    otable.add_column( Column( name='fluxraw', data=irac.fluxraw, unit='electrons' ) )
+    otable.add_column( Column( name='fluxstar', data=irac.fluxstar, unit='electrons' ) )
+    otable.add_column( Column( name='shotstar', data=irac.shotstar, unit='electrons' ) )
+    otable.add_column( Column( name='goodbad', data=irac.goodbad, unit='1=good, 0=bad' ) )
+    centroid_method = irac.centroid_kwargs['method']
+    if centroid_method=='gauss2d':
+        otable.add_column( Column( name='xcent', data=irac.xy_gauss2d[:,0], unit='pixel' ) )
+        otable.add_column( Column( name='ycent', data=irac.xy_gauss2d[:,1], unit='pixel' ) )
+    elif centroid_method=='fluxweight':
+        otable.add_column( Column( name='xcent', data=irac.xy_fluxweight[:,0], unit='pixel' ) )
+        otable.add_column( Column( name='ycent', data=irac.xy_fluxweight[:,1], unit='pixel' ) )
+    elif centroid_method=='gauss1d':
+        otable.add_column( Column( name='xcent', data=irac.xy_gauss1d[:,0], unit='pixel' ) )
+        otable.add_column( Column( name='ycent', data=irac.xy_gauss1d[:,1], unit='pixel' ) )
     nframes = len( irac.goodbad )
     nreject = np.sum( irac.goodbad )
-    otable.add_keyword( 'nframes_total', nframes )
-    otable.add_keyword( 'nframes_reject', nreject )
-    otable.write( opath, overwrite=True )
-    print '\nSaved output table:\n{0}'.format( opath )
+    otable.write( opath, overwrite=True, format=format )
+    print( '\nSaved output table:\n{0}'.format( opath ) )
 
     return None
     

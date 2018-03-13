@@ -434,9 +434,14 @@ def run_gp_mle( data, syspars, mle_ofilepath, initial_ranges={}, channel='ch1', 
     for key in mp.model.free.keys():
         mp.model.free[key].value = mles[key][ix]
     print '\nRunning MLE for unbinned GP...'
+    for key in mp.model.free.keys():
+        print '1 yyyyy', key, mp.model.free[key].value
     t1 = time.time()
     mp.fit()
     t2 = time.time()
+    for key in mp.model.free.keys():
+        print '2 yyyyy', key, mp.model.free[key].value
+    pdb.set_trace()
     print 'Finished (took {0:.2f} minutes)'.format( ( t2-t1 )/60. )
     print '\nFinal MLE results for unbinned GP model:'
     for key in mp.model.free.keys():

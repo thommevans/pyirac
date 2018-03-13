@@ -1,7 +1,6 @@
 import pdb, os, sys, shutil 
-import pyfits
 import numpy as np
-import single_star_routines
+from . import single_star_routines
 
 class irac():
     """
@@ -30,6 +29,8 @@ class irac():
         self.bg_kwargs = { 'method':'annulus_circle', 'value':'median', \
                            'annulus_inedge':15, 'annulus_width':2 }
         self.goodbad = None
+        self.goodbad_xy = None
+        self.goodbad_flux = None
         self.bjd_kw = 'BMJD_OBS'
         self.readnoise_kw = 'RONOISE'
         self.readnoise = None
