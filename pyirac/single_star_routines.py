@@ -163,6 +163,7 @@ def extract_pix_timeseries( irac ):
             counter += 1
     return None
 
+
 def centroids( irac ):
     """
     Calculates the centroids for each image. Requires an
@@ -710,10 +711,8 @@ def iraf_centroid( adir, fitsfile, xymid, jth_sub, boxwidth ):
 
 def preclean( irac, iters=2 ):
     """
-    NEED TO DECIDE WHERE THIS FITS INTO THE OVERALL PIPELINE.
-    FOR INSTANCE, IT MAKES SENSE FOR IT TO BE RUN AFTER THE
-    CENTROIDING, BUT PERHAPS IT THEN MAKES SENSE FOR THE
-    CENTROIDING TO BE RE-RUN AGAIN ... POSSIBLY NOT WORTH IT.
+    This step should come after the centroids have been computed
+    but before the aperture photometry.
     """
 
     # Start off assuming all frames are good,
@@ -1092,10 +1091,7 @@ def bg_subtract( irac ):
     for i in range( irac.nfits ):
 
         # Read in the contents of the ith FITS file:
-        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
         hdu = pyfits.open( irac.fitsfiles[i] )
-        #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-        #fits_data_i = hdu[0].read() # works with fitsio v0.9.5
         fits_data_i = hdu[0].data
         hdu.close()
 
@@ -1109,8 +1105,6 @@ def bg_subtract( irac ):
                 
             # Determine the current image number:
             k = np.sum( irac.nsub[:i] ) + j
-            if irac.goodbad[k]==0:
-                continue
 
             if i==0:
                 naxis1 = np.shape( fullarray )[1]
@@ -1118,8 +1112,6 @@ def bg_subtract( irac ):
                 xpixs = range( naxis1 )
                 ypixs = range( naxis2 )
                 xmesh, ymesh = np.meshgrid( xpixs, ypixs )
-            if irac.goodbad[k]==0:
-                continue
             if k%500==0:
                 print( '... up to frame {0} of {1} (in {2})'\
                        .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) ) )
@@ -1159,12 +1151,9 @@ def bg_subtract( irac ):
         
     irac.fluxstar = -1*np.ones( irac.nframes )
     irac.shotstar = -1*np.ones( irac.nframes )
-    ixs = ( irac.goodbad==1 )
-    ap_bg = irac.nappixs[ixs]*irac.bg_ppix[ixs]
-    irac.fluxstar[ixs] = irac.fluxraw[ixs] - ap_bg
-    irac.shotstar[ixs] = np.sqrt( irac.fluxraw[ixs] + ap_bg \
-                                  + irac.nappixs[ixs]*( irac.readnoise**2. ) )
-    
+    ap_bg = irac.nappixs*irac.bg_ppix
+    irac.fluxstar = irac.fluxraw - ap_bg
+    irac.shotstar = np.sqrt( irac.fluxraw + ap_bg + irac.nappixs*( irac.readnoise**2. ) )
     return None
 
 
@@ -1317,10 +1306,7 @@ def ap_phot( irac, save_pngs=False ):
     for i in range( irac.nfits ):
 
         # Read in the contents of the ith FITS file:
-        #hdu = fitsio.FITS( irac.fitsfiles[i], 'r' )
         hdu = pyfits.open( irac.fitsfiles[i] )
-        #fits_data_i = hdu[0].read_image() # worked with fitsio v0.9.0
-        #fits_data_i = hdu[0].read() # works with fitsio v0.9.5
         fits_data_i = hdu[0].data
         hdu.close()
 
@@ -1331,8 +1317,8 @@ def ap_phot( irac, save_pngs=False ):
             if k%500==0:
                 print( '... up to frame {0} of {1} (in {2})'\
                        .format( k+1, irac.nframes, os.path.basename( irac.fitsfiles[i] ) ) )
-            if irac.goodbad[k]==0:
-                continue
+            #if irac.goodbad[k]==0:
+            #    continue
 
             # Extract the current frame:
             if irac.nsub[i]==1:
@@ -1368,7 +1354,10 @@ def ap_phot( irac, save_pngs=False ):
             # the integrated flux:
             irac.fluxraw[k] = dAsub * np.sum( zfap )
             irac.nappixs[k] = dAsub * nsubpixs
-
+            #if irac.goodbad[k]==0:
+            #    print(irac.fluxraw[k])
+            #    pdb.set_trace()
+            
             # Save png images of each photometric aperture if
             # requested:
             if save_pngs==True:
