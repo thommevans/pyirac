@@ -14,9 +14,12 @@ class irac():
         self.obsblocks = None
         self.init_xy = None
         self.bjd = None
+        self.aorixs = None
         self.ap_radius = 3
         self.ap_radius_noisepix_params = [ 0, 0 ]
         self.noisepix_half_boxwidth = 6
+        self.pix_timeseries_central_ixs = [ 15, 15 ]
+        self.pix_timeseries_boxwidth = 3
         self.fluxstar = None
         self.shotstar = None
         self.fluxraw = None        
